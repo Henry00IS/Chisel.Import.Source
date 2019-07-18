@@ -1,0 +1,19 @@
+{
+    "description": "Source 2006 Map Importer for the Chisel Editor",
+    "displayName": "Source 2006 Map Importer for Chisel",
+    "name": "com.oolaboratories.chisel.import.source",
+    "keywords": [
+        "level design",
+        "world building",
+        "CSG",
+        "BSP",
+        "Boolean",
+        "Source",
+        "VMF",
+        "2006",
+        "Map",
+        "Importer"
+    ],
+    "unity": "2018.3",
+    "version": "0.0.1-preview"
+}

@@ -1,0 +1,15 @@
+{
+    "name": "com.oolaboratories.chisel.import.source",
+    "references": [
+        "com.chisel.core",
+        "com.chisel.components"
+    ],
+    "optionalUnityReferences": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": []
+}
