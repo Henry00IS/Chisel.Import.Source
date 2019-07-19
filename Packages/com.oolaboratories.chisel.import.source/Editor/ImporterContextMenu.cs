@@ -15,23 +15,23 @@ namespace OOLaboratories.Chisel.Import.Source.Editor
         [MenuItem("GameObject/Chisel/Import/Valve Map Format 2006...")]
         private static void ImportValveMapFormat2006()
         {
-            try
+            //try
+            //{
+            string path = EditorUtility.OpenFilePanel("Import Source Engine Map", "", "vmf");
+            if (path.Length != 0)
             {
-                string path = EditorUtility.OpenFilePanel("Import Source Engine Map", "", "vmf");
-                if (path.Length != 0)
-                {
-                    EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Parsing Valve Map Format File (*.vmf)...", 0.0f);
-                    var importer = new ValveMapFormat2006.VmfImporter();
-                    var map = importer.Import(path);
+                EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Parsing Valve Map Format File (*.vmf)...", 0.0f);
+                var importer = new ValveMapFormat2006.VmfImporter();
+                var map = importer.Import(path);
 
-                    ValveMapFormat2006.VmfWorldConverter.Import(ChiselModelManager.GetActiveModelOrCreate(), map);
-                }
+                ValveMapFormat2006.VmfWorldConverter.Import(ChiselModelManager.GetActiveModelOrCreate(), map);
             }
-            catch (Exception ex)
-            {
-                EditorUtility.ClearProgressBar();
-                EditorUtility.DisplayDialog("Source Engine Map Import", "An exception occurred while importing the map:\r\n" + ex.Message, "Ohno!");
-            }
+            //}
+            // catch (Exception ex)
+            //{
+            //    EditorUtility.ClearProgressBar();
+            //    EditorUtility.DisplayDialog("Source Engine Map Import", "An exception occurred while importing the map:\r\n" + ex.Message, "Ohno!");
+            //}
         }
     }
 }

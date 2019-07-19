@@ -24,48 +24,152 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
         /// <param name="scale">The scale modifier.</param>
         public static void Import(ChiselModel model, VmfWorld world)
         {
-            try
+            //try
+            //{
+            // create a material searcher to associate materials automatically.
+            MaterialSearcher materialSearcher = new MaterialSearcher();
+
+            // group all the brushes together.
+            //!!!!!!!!!!!!!!!!! GroupBrush groupBrush = new GameObject("Source Engine Map").AddComponent<GroupBrush>();
+            //!!!!!!!!!!!!!!!!! groupBrush.transform.SetParent(model.transform);
+
+            // iterate through all world solids.
+            for (int i = 0; i < world.Solids.Count; i++)
             {
-                // create a material searcher to associate materials automatically.
-                MaterialSearcher materialSearcher = new MaterialSearcher();
-
-                // group all the brushes together.
-                //!!!!!!!!!!!!!!!!! GroupBrush groupBrush = new GameObject("Source Engine Map").AddComponent<GroupBrush>();
-                //!!!!!!!!!!!!!!!!! groupBrush.transform.SetParent(model.transform);
-
-                // iterate through all world solids.
-                for (int i = 0; i < world.Solids.Count; i++)
-                {
 #if UNITY_EDITOR
-                    UnityEditor.EditorUtility.DisplayProgressBar("SabreCSG: Importing Source Engine Map", "Converting Hammer Solids To SabreCSG Brushes (" + (i + 1) + " / " + world.Solids.Count + ")...", i / (float)world.Solids.Count);
+                UnityEditor.EditorUtility.DisplayProgressBar("SabreCSG: Importing Source Engine Map", "Converting Hammer Solids To SabreCSG Brushes (" + (i + 1) + " / " + world.Solids.Count + ")...", i / (float)world.Solids.Count);
 #endif
-                    VmfSolid solid = world.Solids[i];
+                VmfSolid solid = world.Solids[i];
+
+                // don't add triggers to the scene.
+                if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
+                    continue;
+
+                // build a very large cube brush.
+                ChiselBrush go = ChiselComponentFactory.Create<ChiselBrush>(model);
+                go.definition.surfaceDefinition = new ChiselSurfaceDefinition();
+                go.definition.surfaceDefinition.EnsureSize(6);
+                var brushMesh = new BrushMesh();
+                go.definition.brushOutline = brushMesh;
+                if (!BrushMeshFactory.GenerateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition))
+                    Debug.Log("oh noes, I fail");
+
+                //!!!!!!!!!!!!!!!!! var go = model.CreateBrush(PrimitiveBrushType.Cube, Vector3.zero);
+                //!!!!!!!!!!!!!!!!! var pr = go.GetComponent<PrimitiveBrush>();
+                //!!!!!!!!!!!!!!!!! BrushUtility.Resize(pr, new Vector3(8192, 8192, 8192));
+
+                var surface = new ChiselSurface();
+                surface.brushMaterial = ChiselBrushMaterial.CreateInstance(CSGMaterialManager.DefaultFloorMaterial, CSGMaterialManager.DefaultPhysicsMaterial);
+                surface.surfaceDescription = SurfaceDescription.Default;
+
+                // clip all the sides out of the brush.
+                for (int j = solid.Sides.Count; j-- > 0;)
+                {
+                    VmfSolidSide side = solid.Sides[j];
+                    Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
+                    brushMesh.Cut(clip, in surface);
+                    //BrushMesh brushMesh = (BrushMesh)go.me;
+                    //!!!!!!!!!!!!!!!!! ClipUtility.ApplyClipPlane(pr, clip, false);
+
+                    /*// find the polygons associated with the clipping plane.
+                    // the normal is unique and can never occur twice as that wouldn't allow the solid to be convex.
+                    var polygons = pr.GetPolygons().Where(p => p.Plane.normal.EqualsWithEpsilonLower3(clip.normal));
+                    foreach (var polygon in polygons)
+                    {
+                        // detect excluded polygons.
+                        if (IsExcludedMaterial(side.Material))
+                            polygon.UserExcludeFromFinal = true;
+                        // detect collision-only brushes.
+                        if (IsInvisibleMaterial(side.Material))
+                            pr.IsVisible = false;
+                        // find the material in the unity project automatically.
+                        Material material;
+                        // try finding the fully qualified texture name with '/' replaced by '.' so 'BRICK.BRICKWALL052D'.
+                        string materialName = side.Material.Replace("/", ".");
+                        if (materialName.Contains('.'))
+                        {
+                            // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
+                            string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
+                            material = materialSearcher.FindMaterial(new string[] { materialName, tiny });
+                            if (material == null)
+                                Debug.Log("SabreCSG: Tried to find material '" + materialName + "' and also as '" + tiny + "' but it couldn't be found in the project.");
+                        }
+                        else
+                        {
+                            // only try finding 'BRICKWALL052D'.
+                            material = materialSearcher.FindMaterial(new string[] { materialName });
+                            if (material == null)
+                                Debug.Log("SabreCSG: Tried to find material '" + materialName + "' but it couldn't be found in the project.");
+                        }
+                        polygon.Material = material;
+                        // calculate the texture coordinates.
+                        int w = 256;
+                        int h = 256;
+                        if (polygon.Material != null && polygon.Material.mainTexture != null)
+                        {
+                            w = polygon.Material.mainTexture.width;
+                            h = polygon.Material.mainTexture.height;
+                        }
+                        CalculateTextureCoordinates(pr, polygon, w, h, side.UAxis, side.VAxis);
+                    }*/
+                }
+
+                // add the brush to the group.
+                //!!!!!!!!!!!!!!!!! pr.transform.SetParent(groupBrush.transform);
+            }
+
+            // iterate through all entities.
+            /*for (int e = 0; e < world.Entities.Count; e++)
+            {
+#if UNITY_EDITOR
+                UnityEditor.EditorUtility.DisplayProgressBar("SabreCSG: Importing Source Engine Map", "Converting Hammer Entities To SabreCSG Brushes (" + (e + 1) + " / " + world.Entities.Count + ")...", e / (float)world.Entities.Count);
+#endif
+                VmfEntity entity = world.Entities[e];
+
+                // skip entities that sabrecsg can't handle.
+                switch (entity.ClassName)
+                {
+                    case "func_areaportal":
+                    case "func_areaportalwindow":
+                    case "func_capturezone":
+                    case "func_changeclass":
+                    case "func_combine_ball_spawner":
+                    case "func_dustcloud":
+                    case "func_dustmotes":
+                    case "func_nobuild":
+                    case "func_nogrenades":
+                    case "func_occluder":
+                    case "func_precipitation":
+                    case "func_proprespawnzone":
+                    case "func_regenerate":
+                    case "func_respawnroom":
+                    case "func_smokevolume":
+                    case "func_viscluster":
+                        continue;
+                }
+
+                // iterate through all entity solids.
+                for (int i = 0; i < entity.Solids.Count; i++)
+                {
+                    VmfSolid solid = entity.Solids[i];
 
                     // don't add triggers to the scene.
                     if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
                         continue;
 
                     // build a very large cube brush.
-                    ChiselBox go = ChiselComponentFactory.Create<ChiselBox>(model, Vector3.zero, Quaternion.identity, new Vector3(8192, 8192, 8192));
-                    BrushMesh brushMesh = BrushMeshFactory.CreateBox(new Vector3(8192, 8192, 8192), null);
-                    brushMesh.CalculatePlanes();
-                    brushMesh.UpdateHalfEdgePolygonIndices();
-                    brushMesh.CompactHalfEdges();
-
-                    //!!!!!!!!!!!!!!!!! var go = model.CreateBrush(PrimitiveBrushType.Cube, Vector3.zero);
-                    //!!!!!!!!!!!!!!!!! var pr = go.GetComponent<PrimitiveBrush>();
-                    //!!!!!!!!!!!!!!!!! BrushUtility.Resize(pr, new Vector3(8192, 8192, 8192));
+                    var go = model.CreateBrush(PrimitiveBrushType.Cube, Vector3.zero);
+                    var pr = go.GetComponent<PrimitiveBrush>();
+                    BrushUtility.Resize(pr, new Vector3(8192, 8192, 8192));
 
                     // clip all the sides out of the brush.
                     for (int j = solid.Sides.Count; j-- > 0;)
                     {
                         VmfSolidSide side = solid.Sides[j];
-                        Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                        brushMesh.Cut(clip, null);
-                        //BrushMesh brushMesh = (BrushMesh)go.me;
-                        //!!!!!!!!!!!!!!!!! ClipUtility.ApplyClipPlane(pr, clip, false);
+                        Plane clip = new Plane(pr.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), pr.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), pr.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
+                        ClipUtility.ApplyClipPlane(pr, clip, false);
 
-                        /*// find the polygons associated with the clipping plane.
+                        // find the polygons associated with the clipping plane.
                         // the normal is unique and can never occur twice as that wouldn't allow the solid to be convex.
                         var polygons = pr.GetPolygons().Where(p => p.Plane.normal.EqualsWithEpsilonLower3(clip.normal));
                         foreach (var polygon in polygons)
@@ -105,127 +209,29 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                                 h = polygon.Material.mainTexture.height;
                             }
                             CalculateTextureCoordinates(pr, polygon, w, h, side.UAxis, side.VAxis);
-                        }*/
+                        }
                     }
+
+                    // detail brushes that do not affect the CSG world.
+                    if (entity.ClassName == "func_detail")
+                        pr.IsNoCSG = true;
+                    // collision only brushes.
+                    if (entity.ClassName == "func_vehicleclip")
+                        pr.IsVisible = false;
 
                     // add the brush to the group.
                     //!!!!!!!!!!!!!!!!! pr.transform.SetParent(groupBrush.transform);
                 }
-
-                // iterate through all entities.
-                /*for (int e = 0; e < world.Entities.Count; e++)
-                {
-#if UNITY_EDITOR
-                    UnityEditor.EditorUtility.DisplayProgressBar("SabreCSG: Importing Source Engine Map", "Converting Hammer Entities To SabreCSG Brushes (" + (e + 1) + " / " + world.Entities.Count + ")...", e / (float)world.Entities.Count);
-#endif
-                    VmfEntity entity = world.Entities[e];
-
-                    // skip entities that sabrecsg can't handle.
-                    switch (entity.ClassName)
-                    {
-                        case "func_areaportal":
-                        case "func_areaportalwindow":
-                        case "func_capturezone":
-                        case "func_changeclass":
-                        case "func_combine_ball_spawner":
-                        case "func_dustcloud":
-                        case "func_dustmotes":
-                        case "func_nobuild":
-                        case "func_nogrenades":
-                        case "func_occluder":
-                        case "func_precipitation":
-                        case "func_proprespawnzone":
-                        case "func_regenerate":
-                        case "func_respawnroom":
-                        case "func_smokevolume":
-                        case "func_viscluster":
-                            continue;
-                    }
-
-                    // iterate through all entity solids.
-                    for (int i = 0; i < entity.Solids.Count; i++)
-                    {
-                        VmfSolid solid = entity.Solids[i];
-
-                        // don't add triggers to the scene.
-                        if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
-                            continue;
-
-                        // build a very large cube brush.
-                        var go = model.CreateBrush(PrimitiveBrushType.Cube, Vector3.zero);
-                        var pr = go.GetComponent<PrimitiveBrush>();
-                        BrushUtility.Resize(pr, new Vector3(8192, 8192, 8192));
-
-                        // clip all the sides out of the brush.
-                        for (int j = solid.Sides.Count; j-- > 0;)
-                        {
-                            VmfSolidSide side = solid.Sides[j];
-                            Plane clip = new Plane(pr.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), pr.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), pr.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                            ClipUtility.ApplyClipPlane(pr, clip, false);
-
-                            // find the polygons associated with the clipping plane.
-                            // the normal is unique and can never occur twice as that wouldn't allow the solid to be convex.
-                            var polygons = pr.GetPolygons().Where(p => p.Plane.normal.EqualsWithEpsilonLower3(clip.normal));
-                            foreach (var polygon in polygons)
-                            {
-                                // detect excluded polygons.
-                                if (IsExcludedMaterial(side.Material))
-                                    polygon.UserExcludeFromFinal = true;
-                                // detect collision-only brushes.
-                                if (IsInvisibleMaterial(side.Material))
-                                    pr.IsVisible = false;
-                                // find the material in the unity project automatically.
-                                Material material;
-                                // try finding the fully qualified texture name with '/' replaced by '.' so 'BRICK.BRICKWALL052D'.
-                                string materialName = side.Material.Replace("/", ".");
-                                if (materialName.Contains('.'))
-                                {
-                                    // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
-                                    string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
-                                    material = materialSearcher.FindMaterial(new string[] { materialName, tiny });
-                                    if (material == null)
-                                        Debug.Log("SabreCSG: Tried to find material '" + materialName + "' and also as '" + tiny + "' but it couldn't be found in the project.");
-                                }
-                                else
-                                {
-                                    // only try finding 'BRICKWALL052D'.
-                                    material = materialSearcher.FindMaterial(new string[] { materialName });
-                                    if (material == null)
-                                        Debug.Log("SabreCSG: Tried to find material '" + materialName + "' but it couldn't be found in the project.");
-                                }
-                                polygon.Material = material;
-                                // calculate the texture coordinates.
-                                int w = 256;
-                                int h = 256;
-                                if (polygon.Material != null && polygon.Material.mainTexture != null)
-                                {
-                                    w = polygon.Material.mainTexture.width;
-                                    h = polygon.Material.mainTexture.height;
-                                }
-                                CalculateTextureCoordinates(pr, polygon, w, h, side.UAxis, side.VAxis);
-                            }
-                        }
-
-                        // detail brushes that do not affect the CSG world.
-                        if (entity.ClassName == "func_detail")
-                            pr.IsNoCSG = true;
-                        // collision only brushes.
-                        if (entity.ClassName == "func_vehicleclip")
-                            pr.IsVisible = false;
-
-                        // add the brush to the group.
-                        //!!!!!!!!!!!!!!!!! pr.transform.SetParent(groupBrush.transform);
-                    }
-                }*/
+            }*/
 
 #if UNITY_EDITOR
-                UnityEditor.EditorUtility.ClearProgressBar();
+            UnityEditor.EditorUtility.ClearProgressBar();
 #endif
-            }
-            catch (Exception)
-            {
-                throw;
-            }
+            //}
+            //catch (Exception)
+            //{
+            //    throw;
+            //}
         }
 
         // shoutouts to Aleksi Juvani for your vmf importer giving me a clue on why my textures were misaligned.
