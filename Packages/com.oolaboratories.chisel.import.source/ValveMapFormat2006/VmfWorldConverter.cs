@@ -117,10 +117,11 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         w = material.mainTexture.width;
                         h = material.mainTexture.height;
                     }
-                    CalculateTextureCoordinates(go, surface, w, h, side.UAxis, side.VAxis);
 
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
                     clip.Flip();
+
+                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                     brushMesh.Cut(clip, surface);
 
                     // find the polygons associated with the clipping plane.
@@ -293,7 +294,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
 
         // shoutouts to Aleksi Juvani for your vmf importer giving me a clue on why my textures were misaligned.
         // had to add the world space position of the brush to the calculations! https://github.com/aleksijuvani
-        private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
+        private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
         {
             UAxis.Translation = UAxis.Translation % textureWidth;
             VAxis.Translation = VAxis.Translation % textureHeight;
@@ -308,12 +309,15 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             //for (int i = 0; i < surface.Vertices.Length; i++)
             //{
             //var vertex = pr.transform.position + surface.Vertices[i].Position;
+            var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
 
-            //Vector3 uaxis = new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y);
-            //Vector3 vaxis = new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y);
+            Vector4 uaxis = new Vector4(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y, (UAxis.Translation / textureWidth));
+            Vector4 vaxis = new Vector4(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y, (VAxis.Translation / textureHeight));
 
-            //surface.surfaceDescription.UV0.U = new Vector4(-UAxis.Vector.X, -UAxis.Vector.Z, UAxis.Vector.Y, UAxis.Translation);
-            //surface.surfaceDescription.UV0.V = new Vector4(-VAxis.Vector.X, -VAxis.Vector.Z, VAxis.Vector.Y, UAxis.Translation);
+            surface.surfaceDescription.UV0.U = uaxis / (textureWidth * (UAxis.Scale * inchesInMeters));//new Vector4(clip.normal.x, clip.normal.y, clip.normal.z, clip.distance);
+            surface.surfaceDescription.UV0.V = vaxis / (-textureHeight * (VAxis.Scale * inchesInMeters));//new Vector4(clip.normal.x, clip.normal.y, clip.normal.z, clip.distance);
+
+            surface.surfaceDescription.UV0 *= localToPlaneSpace;
 
             //var u = Vector3.Dot(vertex, uaxis) / (textureWidth * (UAxis.Scale * inchesInMeters)) + UAxis.Translation / textureWidth;
             //var v = Vector3.Dot(vertex, vaxis) / (textureHeight * (VAxis.Scale * inchesInMeters)) + VAxis.Translation / textureHeight;
