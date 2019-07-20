@@ -119,9 +119,9 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     }
 
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                    clip.Flip();
-
                     CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+
+                    clip.Flip();
                     brushMesh.Cut(clip, surface);
 
                     // find the polygons associated with the clipping plane.
@@ -249,7 +249,18 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                             surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.Collidable;
                         }
 
+                        // calculate the texture coordinates.
+                        int w = 256;
+                        int h = 256;
+                        if (material.mainTexture != null)
+                        {
+                            w = material.mainTexture.width;
+                            h = material.mainTexture.height;
+                        }
+
                         Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
+                        CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+
                         clip.Flip();
                         brushMesh.Cut(clip, surface);
 
@@ -296,28 +307,75 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
         // had to add the world space position of the brush to the calculations! https://github.com/aleksijuvani
         private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
         {
-            UAxis.Translation = UAxis.Translation % textureWidth;
-            VAxis.Translation = VAxis.Translation % textureHeight;
+            var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
+            var planeSpaceToLocal = localToPlaneSpace.inverse;
 
-            if (UAxis.Translation < -textureWidth / 2f)
-                UAxis.Translation += textureWidth;
+            if (Math.Abs(UAxis.Scale) < 0.0001f) UAxis.Scale = 1.0f;
+            if (Math.Abs(VAxis.Scale) < 0.0001f) VAxis.Scale = 1.0f;
 
-            if (VAxis.Translation < -textureHeight / 2f)
-                VAxis.Translation += textureHeight;
+            const float VmfMeters = 64.0f;// / 1.22f;
+                                          //*VmfMeters
+                                          //var scaleA   = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(VmfMeters, VmfMeters, VmfMeters));
+            var swizzleA = new Matrix4x4(new Vector4(-1, 0, 0, 0),
+                                         new Vector4(0, 0, -1, 0),
+                                         new Vector4(0, -1, 0, 0),
+                                         new Vector4(0, 0, 0, 1));
+
+            var uoffset = (Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z)) + (UAxis.Translation / textureWidth));
+            var voffset = -(Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z)) + (VAxis.Translation / textureHeight));
+            var scaleX = (VmfMeters / textureWidth) / (VmfMeters / (textureWidth * (0.25f / UAxis.Scale)));//(VmfMeters * (64.0f / textureWidth)) / (textureWidth * UAxis.Scale);
+            var scaleY = (VmfMeters / textureHeight) / (VmfMeters / (textureHeight * (0.25f / VAxis.Scale)));//(VmfMeters * (64.0f / textureWidth)) / (textureWidth * UAxis.Scale);
+            //var scaleY = (VmfMeters / textureHeight) * (1.0f / VAxis.Scale);//(VmfMeters * (256.0f / textureHeight)) / (textureHeight * VAxis.Scale);
+
+            var shiftB = Matrix4x4.TRS(new Vector3(uoffset, voffset, 0), Quaternion.identity, Vector3.one);
+
+            var scaleB = new Matrix4x4(new Vector4(scaleX, 0, 0, 0),
+                                         new Vector4(0, scaleY, 0, 0),
+                                         new Vector4(0, 0, 1, 0),
+                                         new Vector4(0, 0, 0, 1));
+
+            var uVector = new Vector4(-UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z, 0.0f);
+            var vVector = new Vector4(VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z, 0.0f);
+            var uvMatrix = new UVMatrix(uVector, vVector);
+            var matrix = uvMatrix.ToMatrix();
+
+            //matrix = matrix * scaleA;
+            matrix = matrix * swizzleA;
+            matrix = matrix * localToPlaneSpace;
+            matrix = matrix * shiftB;
+            matrix = matrix * scaleB;
+
+            surface.surfaceDescription.UV0 = new UVMatrix(matrix);
+
+            //UAxis.Translation = UAxis.Translation % textureWidth;
+            //VAxis.Translation = VAxis.Translation % textureHeight;
+            //
+            //if (UAxis.Translation < -textureWidth / 2f)
+            //    UAxis.Translation += textureWidth;
+            //
+            //if (VAxis.Translation < -textureHeight / 2f)
+            //    VAxis.Translation += textureHeight;
+
+            //surface.surfaceDescription.UV0.U = new Vector4(UAxis.Vector.X, -UAxis.Vector.Z, UAxis.Vector.Y);
 
             // calculate texture coordinates.
             //for (int i = 0; i < surface.Vertices.Length; i++)
             //{
             //var vertex = pr.transform.position + surface.Vertices[i].Position;
-            var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
+            //clip.distance *= -1;
+            //var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
 
-            Vector4 uaxis = new Vector4(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y, (UAxis.Translation / textureWidth));
-            Vector4 vaxis = new Vector4(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y, (VAxis.Translation / textureHeight));
+            //Vector4 uaxis = new Vector4(UAxis.Vector.X, -UAxis.Vector.Z, UAxis.Vector.Y, (UAxis.Translation /*/ textureWidth*/));
+            //Vector4 vaxis = new Vector4(-VAxis.Vector.X, -VAxis.Vector.Z, VAxis.Vector.Y, (VAxis.Translation /*/ textureHeight*/));
 
-            surface.surfaceDescription.UV0.U = uaxis / (textureWidth * (UAxis.Scale * inchesInMeters));//new Vector4(clip.normal.x, clip.normal.y, clip.normal.z, clip.distance);
-            surface.surfaceDescription.UV0.V = vaxis / (-textureHeight * (VAxis.Scale * inchesInMeters));//new Vector4(clip.normal.x, clip.normal.y, clip.normal.z, clip.distance);
+            //surface.surfaceDescription.UV0.U = uaxis; // (textureWidth * (UAxis.Scale * inchesInMeters));
+            //surface.surfaceDescription.UV0.V = vaxis; // (textureHeight * (VAxis.Scale * inchesInMeters));
 
-            surface.surfaceDescription.UV0 *= localToPlaneSpace;
+            //surface.surfaceDescription.UV0 *= localToPlaneSpace;
+
+            //surface.surfaceDescription.UV0 *= Matrix4x4.Scale(new Vector3(1.0f / (textureWidth * (UAxis.Scale * inchesInMeters)), 1.0f / (textureHeight * (VAxis.Scale * inchesInMeters)), 1.0f));
+
+            //Debug.Log((textureWidth * (UAxis.Scale * inchesInMeters)));
 
             //var u = Vector3.Dot(vertex, uaxis) / (textureWidth * (UAxis.Scale * inchesInMeters)) + UAxis.Translation / textureWidth;
             //var v = Vector3.Dot(vertex, vaxis) / (textureHeight * (VAxis.Scale * inchesInMeters)) + VAxis.Translation / textureHeight;
