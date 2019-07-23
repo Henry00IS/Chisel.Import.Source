@@ -313,7 +313,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             if (Math.Abs(UAxis.Scale) < 0.0001f) UAxis.Scale = 1.0f;
             if (Math.Abs(VAxis.Scale) < 0.0001f) VAxis.Scale = 1.0f;
 
-            const float VmfMeters = 64.0f;// / 1.22f;
+            const float VmfMeters = 32.0f;// / 1.22f;
                                           //*VmfMeters
                                           //var scaleA   = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(VmfMeters, VmfMeters, VmfMeters));
             var swizzleA = new Matrix4x4(new Vector4(-1, 0, 0, 0),
@@ -323,9 +323,9 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
 
             var uoffset = (Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z)) + (UAxis.Translation / textureWidth));
             var voffset = -(Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z)) + (VAxis.Translation / textureHeight));
-            var scaleX = (VmfMeters / textureWidth) / (VmfMeters / (textureWidth * (0.25f / UAxis.Scale)));//(VmfMeters * (64.0f / textureWidth)) / (textureWidth * UAxis.Scale);
-            var scaleY = (VmfMeters / textureHeight) / (VmfMeters / (textureHeight * (0.25f / VAxis.Scale)));//(VmfMeters * (64.0f / textureWidth)) / (textureWidth * UAxis.Scale);
-            //var scaleY = (VmfMeters / textureHeight) * (1.0f / VAxis.Scale);//(VmfMeters * (256.0f / textureHeight)) / (textureHeight * VAxis.Scale);
+
+            var scaleX = (VmfMeters / textureWidth) / UAxis.Scale;
+            var scaleY = (VmfMeters / textureHeight) / VAxis.Scale;
 
             var shiftB = Matrix4x4.TRS(new Vector3(uoffset, voffset, 0), Quaternion.identity, Vector3.one);
 
@@ -341,7 +341,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
 
             //matrix = matrix * scaleA;
             matrix = matrix * swizzleA;
-            matrix = matrix * localToPlaneSpace;
+            matrix = matrix * planeSpaceToLocal;
             matrix = matrix * shiftB;
             matrix = matrix * scaleB;
 
