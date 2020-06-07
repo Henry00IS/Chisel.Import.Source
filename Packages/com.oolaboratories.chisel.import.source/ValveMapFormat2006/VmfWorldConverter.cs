@@ -3,8 +3,7 @@
 using Chisel.Components;
 using Chisel.Core;
 using System;
-using System.Collections.Generic;
-using System.Linq;
+//using System.Linq;
 using UnityEngine;
 
 namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
@@ -51,7 +50,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                 go.definition.surfaceDefinition.EnsureSize(6);
                 BrushMesh brushMesh = new BrushMesh();
                 go.definition.brushOutline = brushMesh;
-                BrushMeshFactory.GenerateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
+                BrushMeshFactory.CreateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
 
                 // clip all the sides out of the brush.
                 for (int j = solid.Sides.Count; j-- > 0;)
@@ -70,7 +69,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
 
                     // try finding the fully qualified texture name with '/' replaced by '.' so 'BRICK.BRICKWALL052D'.
                     string materialName = side.Material.Replace("/", ".");
-                    if (materialName.Contains('.'))
+                    if (materialName.Contains("."))
                     {
                         // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
                         string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
@@ -89,12 +88,12 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     // fallback to default material.
                     if (material == null)
                     {
-                        material = CSGMaterialManager.DefaultFloorMaterial;
+                        material = ChiselMaterialManager.DefaultFloorMaterial;
                     }
 
                     // create chisel surface for the clip.
                     ChiselSurface surface = new ChiselSurface();
-                    surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, CSGMaterialManager.DefaultPhysicsMaterial);
+                    surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, ChiselMaterialManager.DefaultPhysicsMaterial);
                     surface.surfaceDescription = SurfaceDescription.Default;
 
                     // detect collision-only brushes.
@@ -191,7 +190,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     go.definition.surfaceDefinition.EnsureSize(6);
                     BrushMesh brushMesh = new BrushMesh();
                     go.definition.brushOutline = brushMesh;
-                    BrushMeshFactory.GenerateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
+                    BrushMeshFactory.CreateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
 
                     // clip all the sides out of the brush.
                     for (int j = solid.Sides.Count; j-- > 0;)
@@ -210,7 +209,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
 
                         // try finding the fully qualified texture name with '/' replaced by '.' so 'BRICK.BRICKWALL052D'.
                         string materialName = side.Material.Replace("/", ".");
-                        if (materialName.Contains('.'))
+                        if (materialName.Contains("."))
                         {
                             // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
                             string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
@@ -229,12 +228,12 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         // fallback to default material.
                         if (material == null)
                         {
-                            material = CSGMaterialManager.DefaultFloorMaterial;
+                            material = ChiselMaterialManager.DefaultFloorMaterial;
                         }
 
                         // create chisel surface for the clip.
                         ChiselSurface surface = new ChiselSurface();
-                        surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, CSGMaterialManager.DefaultPhysicsMaterial);
+                        surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, ChiselMaterialManager.DefaultPhysicsMaterial);
                         surface.surfaceDescription = SurfaceDescription.Default;
 
                         // detect collision-only brushes.
@@ -307,15 +306,14 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
         // had to add the world space position of the brush to the calculations! https://github.com/aleksijuvani
         private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
         {
-            var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
+            var localToPlaneSpace = Matrix4x4.identity;//MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
             var planeSpaceToLocal = localToPlaneSpace.inverse;
 
             if (Math.Abs(UAxis.Scale) < 0.0001f) UAxis.Scale = 1.0f;
             if (Math.Abs(VAxis.Scale) < 0.0001f) VAxis.Scale = 1.0f;
 
-            const float VmfMeters = 32.0f;// / 1.22f;
-                                          //*VmfMeters
-                                          //var scaleA   = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(VmfMeters, VmfMeters, VmfMeters));
+            const float VmfMeters = 32.0f;
+			
             var swizzleA = new Matrix4x4(new Vector4(-1, 0, 0, 0),
                                          new Vector4(0, 0, -1, 0),
                                          new Vector4(0, -1, 0, 0),
@@ -335,7 +333,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                                          new Vector4(0, 0, 0, 1));
 
             var uVector = new Vector4(-UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z, 0.0f);
-            var vVector = new Vector4(VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z, 0.0f);
+            var vVector = new Vector4(-VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z, 0.0f);
             var uvMatrix = new UVMatrix(uVector, vVector);
             var matrix = uvMatrix.ToMatrix();
 

@@ -1,6 +1,6 @@
 ﻿using Chisel.Components;
 using Chisel.Core;
-using Chisel.Editors;
+//using Chisel.Editors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
