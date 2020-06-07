@@ -1,15 +1,18 @@
 {
     "name": "com.oolaboratories.chisel.import.source",
+    "rootNamespace": "",
     "references": [
         "com.chisel.core",
-        "com.chisel.components"
+        "com.chisel.components",
+        "Unity.Mathematics"
     ],
-    "optionalUnityReferences": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": []
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

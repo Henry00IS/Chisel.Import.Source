@@ -3,6 +3,9 @@
 using Chisel.Components;
 using Chisel.Core;
 using System;
+using System.Collections.Generic;
+using Unity.Mathematics;
+using Unity.Rendering.HybridV2;
 //using System.Linq;
 using UnityEngine;
 
@@ -118,9 +121,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     }
 
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
-
                     clip.Flip();
+                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                     brushMesh.Cut(clip, surface);
 
                     // find the polygons associated with the clipping plane.
@@ -258,9 +260,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         }
 
                         Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                        CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
-
                         clip.Flip();
+                        CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                         brushMesh.Cut(clip, surface);
 
                         // find the polygons associated with the clipping plane.
@@ -302,15 +303,47 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             //}
         }
 
+        private static Vector3 FindSelectionCenter(List<ChiselNode> selectedNodes)
+        {
+            if (selectedNodes == null || selectedNodes.Count == 0)
+                return Vector3.zero;
+
+            Vector3 center;
+            if (selectedNodes.Count > 1)
+            {
+                var bounds = selectedNodes[0].CalculateBounds();
+                var min = bounds.min;
+                var max = bounds.max;
+                for (int i = 1; i < selectedNodes.Count; i++)
+                {
+                    bounds = selectedNodes[i].CalculateBounds();
+
+                    min.x = Mathf.Min(min.x, bounds.min.x);
+                    min.y = Mathf.Min(min.y, bounds.min.y);
+                    min.z = Mathf.Min(min.z, bounds.min.z);
+
+                    max.x = Mathf.Max(max.x, bounds.max.x);
+                    max.y = Mathf.Max(max.y, bounds.max.y);
+                    max.z = Mathf.Max(max.z, bounds.max.z);
+                }
+                center = (min + max) * 0.5f;
+            }
+            else
+                center = selectedNodes[0].CalculateBounds().center;
+            return center;
+        }
+
         // shoutouts to Aleksi Juvani for your vmf importer giving me a clue on why my textures were misaligned.
         // had to add the world space position of the brush to the calculations! https://github.com/aleksijuvani
         private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
         {
-            var localToPlaneSpace = Matrix4x4.identity;//MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
-            var planeSpaceToLocal = localToPlaneSpace.inverse;
+            var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(clip.normal, clip.distance));
+            var planeSpaceToLocal = (Matrix4x4)math.inverse(localToPlaneSpace);
 
             if (Math.Abs(UAxis.Scale) < 0.0001f) UAxis.Scale = 1.0f;
             if (Math.Abs(VAxis.Scale) < 0.0001f) VAxis.Scale = 1.0f;
+
+            VAxis.Scale *= -1.0f; // flip all textures.
 
             const float VmfMeters = 32.0f;
 			
@@ -319,8 +352,12 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                                          new Vector4(0, -1, 0, 0),
                                          new Vector4(0, 0, 0, 1));
 
-            var uoffset = (Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z)) + (UAxis.Translation / textureWidth));
-            var voffset = -(Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z)) + (VAxis.Translation / textureHeight));
+            //var center = FindSelectionCenter(new List<ChiselNode>() { pr });
+            //center = clip.ClosestPointOnPlane(center);
+            //center = (Matrix4x4)localToPlaneSpace * center;
+
+            var uoffset = (Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y)) + (UAxis.Translation / textureWidth));
+            var voffset = (Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) + (VAxis.Translation / textureHeight));
 
             var scaleX = (VmfMeters / textureWidth) / UAxis.Scale;
             var scaleY = (VmfMeters / textureHeight) / VAxis.Scale;
@@ -328,17 +365,17 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             var shiftB = Matrix4x4.TRS(new Vector3(uoffset, voffset, 0), Quaternion.identity, Vector3.one);
 
             var scaleB = new Matrix4x4(new Vector4(scaleX, 0, 0, 0),
-                                         new Vector4(0, scaleY, 0, 0),
-                                         new Vector4(0, 0, 1, 0),
-                                         new Vector4(0, 0, 0, 1));
+                                       new Vector4(0, scaleY, 0, 0),
+                                       new Vector4(0, 0, 1, 0),
+                                       new Vector4(0, 0, 0, 1));
 
-            var uVector = new Vector4(-UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z, 0.0f);
-            var vVector = new Vector4(-VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z, 0.0f);
+            var uVector = new Vector4(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y, 0.0f);
+            var vVector = new Vector4(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y, 0.0f);
             var uvMatrix = new UVMatrix(uVector, vVector);
             var matrix = uvMatrix.ToMatrix();
 
             //matrix = matrix * scaleA;
-            matrix = matrix * swizzleA;
+            //matrix = matrix * swizzleA;
             matrix = matrix * planeSpaceToLocal;
             matrix = matrix * shiftB;
             matrix = matrix * scaleB;
