@@ -16,7 +16,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
     /// </summary>
     public static class VmfWorldConverter
     {
-        private const float inchesInMeters = 0.03125f; // 1/32
+        private const float inchesInMeters = 0.0254f;
 
         /// <summary>
         /// Imports the specified world into the Chisel model.
@@ -121,8 +121,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     }
 
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                    clip.Flip();
                     CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+                    clip.Flip();
                     brushMesh.Cut(clip, surface);
 
                     // find the polygons associated with the clipping plane.
@@ -260,8 +260,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         }
 
                         Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                        clip.Flip();
                         CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+                        clip.Flip();
                         brushMesh.Cut(clip, surface);
 
                         // find the polygons associated with the clipping plane.
@@ -340,12 +340,14 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(clip.normal, clip.distance));
             var planeSpaceToLocal = (Matrix4x4)math.inverse(localToPlaneSpace);
 
-            if (Math.Abs(UAxis.Scale) < 0.0001f) UAxis.Scale = 1.0f;
-            if (Math.Abs(VAxis.Scale) < 0.0001f) VAxis.Scale = 1.0f;
+            UAxis.Translation %= textureWidth;
+            VAxis.Translation %= textureHeight;
 
-            VAxis.Scale *= -1.0f; // flip all textures.
+            if (UAxis.Translation < -textureWidth / 2f)
+                UAxis.Translation += textureWidth;
 
-            const float VmfMeters = 32.0f;
+            if (VAxis.Translation < -textureHeight / 2f)
+                VAxis.Translation += textureHeight;
 			
             var swizzleA = new Matrix4x4(new Vector4(-1, 0, 0, 0),
                                          new Vector4(0, 0, -1, 0),
@@ -356,29 +358,31 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             //center = clip.ClosestPointOnPlane(center);
             //center = (Matrix4x4)localToPlaneSpace * center;
 
-            var uoffset = (Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y)) + (UAxis.Translation / textureWidth));
-            var voffset = (Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) + (VAxis.Translation / textureHeight));
 
-            var scaleX = (VmfMeters / textureWidth) / UAxis.Scale;
-            var scaleY = (VmfMeters / textureHeight) / VAxis.Scale;
+            var scaleX = textureWidth * UAxis.Scale * inchesInMeters;
+            var scaleY = textureHeight * VAxis.Scale * inchesInMeters;
 
-            var shiftB = Matrix4x4.TRS(new Vector3(uoffset, voffset, 0), Quaternion.identity, Vector3.one);
+            var uoffset = Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y)) + (UAxis.Translation / textureWidth);
+            var voffset = Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) + (VAxis.Translation / textureHeight);
+
+
+            //var shiftB = Matrix4x4.TRS(new Vector3(uoffset, voffset, 0), Quaternion.identity, Vector3.one);
 
             var scaleB = new Matrix4x4(new Vector4(scaleX, 0, 0, 0),
                                        new Vector4(0, scaleY, 0, 0),
                                        new Vector4(0, 0, 1, 0),
                                        new Vector4(0, 0, 0, 1));
 
-            var uVector = new Vector4(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y, 0.0f);
-            var vVector = new Vector4(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y, 0.0f);
+            var uVector = new Vector4(UAxis.Vector.X / scaleX, UAxis.Vector.Z / scaleX, UAxis.Vector.Y / scaleX, uoffset);
+            var vVector = new Vector4(VAxis.Vector.X / scaleY, VAxis.Vector.Z / scaleY, VAxis.Vector.Y / scaleY, voffset);
             var uvMatrix = new UVMatrix(uVector, vVector);
             var matrix = uvMatrix.ToMatrix();
 
             //matrix = matrix * scaleA;
             //matrix = matrix * swizzleA;
             matrix = matrix * planeSpaceToLocal;
-            matrix = matrix * shiftB;
-            matrix = matrix * scaleB;
+            //matrix = matrix * shiftB;
+            //matrix = matrix * scaleB;
 
             surface.surfaceDescription.UV0 = new UVMatrix(matrix);
 
