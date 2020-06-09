@@ -121,8 +121,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     }
 
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                     clip.Flip();
+                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                     brushMesh.Cut(clip, surface);
 
                     // find the polygons associated with the clipping plane.
@@ -260,8 +260,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         }
 
                         Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                        CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                         clip.Flip();
+                        CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                         brushMesh.Cut(clip, surface);
 
                         // find the polygons associated with the clipping plane.
@@ -383,6 +383,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             matrix = matrix * planeSpaceToLocal;
             //matrix = matrix * shiftB;
             //matrix = matrix * scaleB;
+
+            matrix *= Matrix4x4.Scale(new Vector3(-1.0f, -1.0f, 1.0f));
 
             surface.surfaceDescription.UV0 = new UVMatrix(matrix);
 
