@@ -363,7 +363,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             var scaleY = textureHeight * VAxis.Scale * inchesInMeters;
 
             var uoffset = Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y)) + (UAxis.Translation / textureWidth);
-            var voffset = Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) + (VAxis.Translation / textureHeight);
+            var voffset = Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) - (VAxis.Translation / textureHeight);
 
 
             //var shiftB = Matrix4x4.TRS(new Vector3(uoffset, voffset, 0), Quaternion.identity, Vector3.one);
