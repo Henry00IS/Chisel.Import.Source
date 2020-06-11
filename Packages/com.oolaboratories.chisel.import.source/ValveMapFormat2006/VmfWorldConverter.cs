@@ -365,15 +365,15 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             var scaleY = textureHeight * VAxis.Scale * inchesInMeters;
 
             var uoffset = Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y)) + (UAxis.Translation / textureWidth);
-            var voffset = Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) - (VAxis.Translation / textureHeight);
+            var voffset = Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) + (VAxis.Translation / textureHeight);
 
             var uVector = new Vector4(UAxis.Vector.X / scaleX, UAxis.Vector.Z / scaleX, UAxis.Vector.Y / scaleX, uoffset);
             var vVector = new Vector4(VAxis.Vector.X / scaleY, VAxis.Vector.Z / scaleY, VAxis.Vector.Y / scaleY, voffset);
-            var uvMatrix = new UVMatrix(uVector, vVector);
+            var uvMatrix = new UVMatrix(uVector, -vVector);
             var matrix = uvMatrix.ToMatrix();
 
             matrix = matrix * planeSpaceToLocal;
-            matrix *= Matrix4x4.Scale(new Vector3(-1.0f, -1.0f, 1.0f));
+            matrix *= Matrix4x4.Scale(new Vector3(-1.0f, 1.0f, 1.0f));
 
             surface.surfaceDescription.UV0 = new UVMatrix(matrix);
         }
