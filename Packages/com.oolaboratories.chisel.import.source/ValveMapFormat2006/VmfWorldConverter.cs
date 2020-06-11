@@ -361,81 +361,21 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             if (VAxis.Translation < -textureHeight / 2f)
                 VAxis.Translation += textureHeight;
 
-            var swizzleA = new Matrix4x4(new Vector4(-1, 0, 0, 0),
-                                         new Vector4(0, 0, -1, 0),
-                                         new Vector4(0, -1, 0, 0),
-                                         new Vector4(0, 0, 0, 1));
-
-            //var center = FindSelectionCenter(new List<ChiselNode>() { pr });
-            //center = clip.ClosestPointOnPlane(center);
-            //center = (Matrix4x4)localToPlaneSpace * center;
-
-
             var scaleX = textureWidth * UAxis.Scale * inchesInMeters;
             var scaleY = textureHeight * VAxis.Scale * inchesInMeters;
 
             var uoffset = Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y)) + (UAxis.Translation / textureWidth);
             var voffset = Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) - (VAxis.Translation / textureHeight);
 
-
-            //var shiftB = Matrix4x4.TRS(new Vector3(uoffset, voffset, 0), Quaternion.identity, Vector3.one);
-
-            var scaleB = new Matrix4x4(new Vector4(scaleX, 0, 0, 0),
-                                       new Vector4(0, scaleY, 0, 0),
-                                       new Vector4(0, 0, 1, 0),
-                                       new Vector4(0, 0, 0, 1));
-
             var uVector = new Vector4(UAxis.Vector.X / scaleX, UAxis.Vector.Z / scaleX, UAxis.Vector.Y / scaleX, uoffset);
             var vVector = new Vector4(VAxis.Vector.X / scaleY, VAxis.Vector.Z / scaleY, VAxis.Vector.Y / scaleY, voffset);
             var uvMatrix = new UVMatrix(uVector, vVector);
             var matrix = uvMatrix.ToMatrix();
 
-            //matrix = matrix * scaleA;
-            //matrix = matrix * swizzleA;
             matrix = matrix * planeSpaceToLocal;
-            //matrix = matrix * shiftB;
-            //matrix = matrix * scaleB;
-
             matrix *= Matrix4x4.Scale(new Vector3(-1.0f, -1.0f, 1.0f));
 
             surface.surfaceDescription.UV0 = new UVMatrix(matrix);
-
-            //UAxis.Translation = UAxis.Translation % textureWidth;
-            //VAxis.Translation = VAxis.Translation % textureHeight;
-            //
-            //if (UAxis.Translation < -textureWidth / 2f)
-            //    UAxis.Translation += textureWidth;
-            //
-            //if (VAxis.Translation < -textureHeight / 2f)
-            //    VAxis.Translation += textureHeight;
-
-            //surface.surfaceDescription.UV0.U = new Vector4(UAxis.Vector.X, -UAxis.Vector.Z, UAxis.Vector.Y);
-
-            // calculate texture coordinates.
-            //for (int i = 0; i < surface.Vertices.Length; i++)
-            //{
-            //var vertex = pr.transform.position + surface.Vertices[i].Position;
-            //clip.distance *= -1;
-            //var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(clip);
-
-            //Vector4 uaxis = new Vector4(UAxis.Vector.X, -UAxis.Vector.Z, UAxis.Vector.Y, (UAxis.Translation /*/ textureWidth*/));
-            //Vector4 vaxis = new Vector4(-VAxis.Vector.X, -VAxis.Vector.Z, VAxis.Vector.Y, (VAxis.Translation /*/ textureHeight*/));
-
-            //surface.surfaceDescription.UV0.U = uaxis; // (textureWidth * (UAxis.Scale * inchesInMeters));
-            //surface.surfaceDescription.UV0.V = vaxis; // (textureHeight * (VAxis.Scale * inchesInMeters));
-
-            //surface.surfaceDescription.UV0 *= localToPlaneSpace;
-
-            //surface.surfaceDescription.UV0 *= Matrix4x4.Scale(new Vector3(1.0f / (textureWidth * (UAxis.Scale * inchesInMeters)), 1.0f / (textureHeight * (VAxis.Scale * inchesInMeters)), 1.0f));
-
-            //Debug.Log((textureWidth * (UAxis.Scale * inchesInMeters)));
-
-            //var u = Vector3.Dot(vertex, uaxis) / (textureWidth * (UAxis.Scale * inchesInMeters)) + UAxis.Translation / textureWidth;
-            //var v = Vector3.Dot(vertex, vaxis) / (textureHeight * (VAxis.Scale * inchesInMeters)) + VAxis.Translation / textureHeight;
-
-            //surface.Vertices[i].UV.x = u;
-            //surface.Vertices[i].UV.y = -v;
-            //}
         }
 
         /// <summary>
