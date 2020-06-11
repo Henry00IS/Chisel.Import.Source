@@ -47,6 +47,12 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                 if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
                     continue;
 
+                // HACK: Fix me in the future!
+                // HACK: Chisel doesn't support collision brushes yet- skip them completely!
+                if (solid.Sides.Count > 0 && IsInvisibleMaterial(solid.Sides[0].Material))
+                    continue;
+                // HACK: Fix me in the future!
+
                 // build a very large cube brush.
                 ChiselBrush go = ChiselComponentFactory.Create<ChiselBrush>(model);
                 go.definition.surfaceDefinition = new ChiselSurfaceDefinition();
@@ -99,7 +105,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, ChiselMaterialManager.DefaultPhysicsMaterial);
                     surface.surfaceDescription = SurfaceDescription.Default;
 
-                    // detect collision-only brushes.
+                    // detect collision-only polygons.
                     if (IsInvisibleMaterial(side.Material))
                     {
                         surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.RenderReceiveCastShadows;
@@ -186,6 +192,12 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
                         continue;
 
+                    // HACK: Fix me in the future!
+                    // HACK: Chisel doesn't support collision brushes yet- skip them completely!
+                    if (solid.Sides.Count > 0 && IsInvisibleMaterial(solid.Sides[0].Material))
+                        continue;
+                    // HACK: Fix me in the future!
+
                     // build a very large cube brush.
                     ChiselBrush go = ChiselComponentFactory.Create<ChiselBrush>(model);
                     go.definition.surfaceDefinition = new ChiselSurfaceDefinition();
@@ -238,7 +250,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, ChiselMaterialManager.DefaultPhysicsMaterial);
                         surface.surfaceDescription = SurfaceDescription.Default;
 
-                        // detect collision-only brushes.
+                        // detect collision-only polygons.
                         if (IsInvisibleMaterial(side.Material))
                         {
                             surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.RenderReceiveCastShadows;
@@ -348,7 +360,7 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
 
             if (VAxis.Translation < -textureHeight / 2f)
                 VAxis.Translation += textureHeight;
-			
+
             var swizzleA = new Matrix4x4(new Vector4(-1, 0, 0, 0),
                                          new Vector4(0, 0, -1, 0),
                                          new Vector4(0, -1, 0, 0),
