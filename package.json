@@ -1,0 +1,24 @@
+{
+  "description": "Source 2006 Map Importer for the Chisel Editor",
+  "displayName": "Chisel Source 2006 Map Importer",
+  "name": "com.aeternumgames.chisel.import.source",
+  "keywords": [
+    "level design",
+    "world building",
+    "CSG",
+    "BSP",
+    "Boolean",
+    "Source",
+    "VMF",
+    "2006",
+    "Map",
+    "Importer"
+  ],
+  "unity": "2018.3",
+  "version": "1.0.0",
+  "dependencies": {
+    "com.unity.mathematics": "1.1.0",
+    "com.chisel.core": "",
+    "com.chisel.components": ""
+  }
+}
