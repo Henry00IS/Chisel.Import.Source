@@ -1,5 +1,5 @@
 {
-    "name": "com.aeternumgames.chisel.import.source",
+    "name": "chisel.import.source",
     "rootNamespace": "",
     "references": [
         "com.chisel.core",
