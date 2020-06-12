@@ -113,8 +113,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     // detect excluded polygons.
                     if (IsExcludedMaterial(side.Material))
                     {
-                        surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.RenderReceiveCastShadows;
-                        surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.Collidable;
+                        surface.brushMaterial.LayerUsage &= LayerUsageFlags.CastShadows;
+                        surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
                     }
 
                     // calculate the texture coordinates.
@@ -258,8 +258,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         // detect excluded polygons.
                         if (IsExcludedMaterial(side.Material))
                         {
-                            surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.RenderReceiveCastShadows;
-                            surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.Collidable;
+                            surface.brushMaterial.LayerUsage &= LayerUsageFlags.CastShadows;
+                            surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
                         }
 
                         // calculate the texture coordinates.
