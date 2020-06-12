@@ -127,8 +127,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                     }
 
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                    clip.Flip();
                     CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+                    clip.Flip();
                     brushMesh.Cut(clip, surface);
 
                     // find the polygons associated with the clipping plane.
@@ -272,8 +272,8 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
                         }
 
                         Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                        clip.Flip();
                         CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+                        clip.Flip();
                         brushMesh.Cut(clip, surface);
 
                         // find the polygons associated with the clipping plane.
@@ -345,8 +345,6 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             return center;
         }
 
-        // shoutouts to Aleksi Juvani for your vmf importer giving me a clue on why my textures were misaligned.
-        // had to add the world space position of the brush to the calculations! https://github.com/aleksijuvani
         private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
         {
             var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(clip.normal, clip.distance));
@@ -373,7 +371,6 @@ namespace OOLaboratories.Chisel.Import.Source.ValveMapFormat2006
             var matrix = uvMatrix.ToMatrix();
 
             matrix = matrix * planeSpaceToLocal;
-            matrix *= Matrix4x4.Scale(new Vector3(-1.0f, 1.0f, 1.0f));
 
             surface.surfaceDescription.UV0 = new UVMatrix(matrix);
         }
