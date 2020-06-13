@@ -27,36 +27,43 @@ using System;
 namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 {
     /// <summary>
-    /// Represents a Hammer Plane.
+    /// Represents a Hammer Vector3.
     /// </summary>
-    public class VmfPlane
+    public class VmfVector4
     {
         /// <summary>
-        /// The first point of the plane definition.
+        /// The x-coordinate of the vector.
         /// </summary>
-        public VmfVector3 P1;
+        public float X;
 
         /// <summary>
-        /// The second point of the plane definition.
+        /// The y-coordinate of the vector.
         /// </summary>
-        public VmfVector3 P2;
+        public float Y;
 
         /// <summary>
-        /// The third point of the plane definition.
+        /// The z-coordinate of the vector.
         /// </summary>
-        public VmfVector3 P3;
+        public float Z;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="VmfPlane"/> class.
+        /// The w-coordinate of the vector.
         /// </summary>
-        /// <param name="p1">The first point of the plane definition.</param>
-        /// <param name="p2">The second point of the plane definition.</param>
-        /// <param name="p3">The third point of the plane definition.</param>
-        public VmfPlane(VmfVector3 p1, VmfVector3 p2, VmfVector3 p3)
+        public float W;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="VmfVector4"/> class.
+        /// </summary>
+        /// <param name="x">The x-coordinate of the vector.</param>
+        /// <param name="y">The y-coordinate of the vector.</param>
+        /// <param name="z">The z-coordinate of the vector.</param>
+        /// <param name="w">The z-coordinate of the vector.</param>
+        public VmfVector4(float x, float y, float z, float w)
         {
-            P1 = p1;
-            P2 = p2;
-            P3 = p3;
+            X = x;
+            Y = y;
+            Z = z;
+            W = w;
         }
 
         /// <summary>
@@ -65,7 +72,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// <returns>A <see cref="System.String"/> that represents this instance.</returns>
         public override string ToString()
         {
-            return "VmfPlane (P1=" + P1 + ", P2=" + P2 + ", P3=" + P3 + ")";
+            return "VmfVector4 (X=" + X + ", Y=" + Y + ", Z=" + Z + ", W=" + W + ")";
         }
     }
 }

@@ -1,4 +1,28 @@
-﻿using Chisel.Components;
+﻿///////////////////////////////////////////////////////////////////////////////////////////////////
+// MIT License
+//
+// Copyright(c) 2018-2020 Henry de Jongh
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+////////////////////// https://github.com/Henry00IS/ ////////////////// http://aeternumgames.com //
+
+using Chisel.Components;
 using Chisel.Core;
 using System.Collections.Generic;
 using Unity.Mathematics;
@@ -18,7 +42,6 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// </summary>
         /// <param name="model">The model to import into.</param>
         /// <param name="world">The world to be imported.</param>
-        /// <param name="scale">The scale modifier.</param>
         public static void Import(ChiselModel model, VmfWorld world)
         {
             //try
@@ -34,7 +57,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             for (int i = 0; i < world.Solids.Count; i++)
             {
 #if UNITY_EDITOR
-                UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Converting Hammer Solids To Chisel Brushes (" + (i + 1) + " / " + world.Solids.Count + ")...", i / (float)world.Solids.Count);
+                UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map (1/3)", "Converting Hammer Solids To Chisel Brushes (" + (i + 1) + " / " + world.Solids.Count + ")...", i / (float)world.Solids.Count);
 #endif
                 VmfSolid solid = world.Solids[i];
 
@@ -152,7 +175,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             for (int e = 0; e < world.Entities.Count; e++)
             {
 #if UNITY_EDITOR
-                UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Converting Hammer Entities To Chisel Brushes (" + (e + 1) + " / " + world.Entities.Count + ")...", e / (float)world.Entities.Count);
+                UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map (2/3)", "Converting Hammer Entities To Chisel Brushes (" + (e + 1) + " / " + world.Entities.Count + ")...", e / (float)world.Entities.Count);
 #endif
                 VmfEntity entity = world.Entities[e];
 
