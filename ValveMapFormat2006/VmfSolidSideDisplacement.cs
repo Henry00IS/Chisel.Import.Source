@@ -23,27 +23,24 @@
 ////////////////////// https://github.com/Henry00IS/ ////////////////// http://aeternumgames.com //
 
 using System;
+using System.Collections.Generic;
 
 namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 {
     /// <summary>
-    /// Represents a Hammer Solid Side.
+    /// Represents a Hammer Solid Side Displacement.
     /// </summary>
-    public class VmfSolidSide
+    public class VmfSolidSideDisplacement
     {
-        public int Id = -1;
-        public VmfPlane Plane;
-        public string Material;
-        public float Rotation;
-        public VmfAxis UAxis;
-        public VmfAxis VAxis;
-        public int LightmapScale;
-        public int SmoothingGroups;
+        public int Power;
+        public VmfVector3 StartPosition;
+        public float Elevation;
+        public int Subdivide;
 
-        /// <summary>
-        /// The displacement applied to this side or null if no displacement is used.
-        /// </summary>
-        public VmfSolidSideDisplacement Displacement;
+        public List<List<VmfVector3>> Normals = new List<List<VmfVector3>>();
+        public List<List<float>> Distances = new List<List<float>>();
+        public List<List<VmfVector3>> Offsets = new List<List<VmfVector3>>();
+        public List<List<VmfVector3>> OffsetNormals = new List<List<VmfVector3>>();
 
         /// <summary>
         /// Returns a <see cref="System.String"/> that represents this instance.
@@ -51,7 +48,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// <returns>A <see cref="System.String"/> that represents this instance.</returns>
         public override string ToString()
         {
-            return "VMF Solid Side " + Id + " '" + Material + "' " + " " + Plane;
+            return "VMF Solid Side Displacement x" + Power;
         }
     }
 }

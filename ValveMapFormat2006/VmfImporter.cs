@@ -23,6 +23,7 @@
 ////////////////////// https://github.com/Henry00IS/ ////////////////// http://aeternumgames.com //
 
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -63,6 +64,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 object value;
                 VmfSolid solid = null;
                 VmfSolidSide solidSide = null;
+                VmfSolidSideDisplacement displacement = null;
                 VmfEntity entity = null;
                 while (!reader.EndOfStream)
                 {
@@ -170,10 +172,67 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         }
                     }
 
-                    // HACK: detect displacements.
-                    if (closures[0] == "world" && closures[1] == "solid" && closures[2] == "side" && closures[3] == "dispinfo")
+                    // parse world solid side displacement.
+                    if (closures[0] == "world" && closures[1] == "solid" && closures[2] == "side" && closures[3] == "dispinfo" && closures[4] == null)
                     {
-                        solidSide.HasDisplacement = true;
+                        // create a new solid side displacement and add it to the solid side.
+                        if (justEnteredClosure)
+                        {
+                            displacement = new VmfSolidSideDisplacement();
+                            solidSide.Displacement = displacement;
+                        }
+
+                        // parse displacement properties.
+                        if (TryParsekeyValue(line, out key, out value))
+                        {
+                            switch (key)
+                            {
+                                case "power": displacement.Power = (int)value; break;
+                                case "startposition": displacement.StartPosition = (VmfVector3)value; break;
+                                case "elevation": displacement.Elevation = Convert.ToSingle(value); break;
+                                case "subdiv": displacement.Subdivide = (int)value; break;
+                            }
+                        }
+                    }
+
+                    // parse world solid side displacement normals.
+                    if (closures[0] == "world" && closures[1] == "solid" && closures[2] == "side" && closures[3] == "dispinfo" && closures[4] == "normals" && closures[5] == null)
+                    {
+                        // parse displacement vector rows.
+                        if (TryParseVectorRow(line, out key, out List<VmfVector3> normals))
+                        {
+                            displacement.Normals.Add(normals);
+                        }
+                    }
+
+                    // parse world solid side displacement distances.
+                    if (closures[0] == "world" && closures[1] == "solid" && closures[2] == "side" && closures[3] == "dispinfo" && closures[4] == "distances" && closures[5] == null)
+                    {
+                        // parse displacement float rows.
+                        if (TryParseFloatRow(line, out key, out List<float> distances))
+                        {
+                            displacement.Distances.Add(distances);
+                        }
+                    }
+
+                    // parse world solid side displacement offsets.
+                    if (closures[0] == "world" && closures[1] == "solid" && closures[2] == "side" && closures[3] == "dispinfo" && closures[4] == "offsets" && closures[5] == null)
+                    {
+                        // parse displacement vector rows.
+                        if (TryParseVectorRow(line, out key, out List<VmfVector3> offsets))
+                        {
+                            displacement.Offsets.Add(offsets);
+                        }
+                    }
+
+                    // parse world solid side displacement offset normals.
+                    if (closures[0] == "world" && closures[1] == "solid" && closures[2] == "side" && closures[3] == "dispinfo" && closures[4] == "offset_normals" && closures[5] == null)
+                    {
+                        // parse displacement vector rows.
+                        if (TryParseVectorRow(line, out key, out List<VmfVector3> offsetnormals))
+                        {
+                            displacement.OffsetNormals.Add(offsetnormals);
+                        }
                     }
 
                     // parse entity.
@@ -285,7 +344,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 return true;
             }
             // detect uv definition.
-            else if (rawvalue[0] == '[')
+            else if (rawvalue[0] == '[' && rawvalue[rawvalue.Length - 1] != ']')
             {
                 string[] values = rawvalue.Replace("[", "").Replace("]", "").Split(' ');
                 value = new VmfAxis(new VmfVector3(float.Parse(values[0], CultureInfo.InvariantCulture), float.Parse(values[1], CultureInfo.InvariantCulture), float.Parse(values[2], CultureInfo.InvariantCulture)), float.Parse(values[3], CultureInfo.InvariantCulture), float.Parse(values[4], CultureInfo.InvariantCulture));
@@ -303,6 +362,13 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             {
                 string[] values = rawvalue.Split(' ');
                 value = new VmfVector4(float.Parse(values[0], CultureInfo.InvariantCulture), float.Parse(values[1], CultureInfo.InvariantCulture), float.Parse(values[2], CultureInfo.InvariantCulture), float.Parse(values[3], CultureInfo.InvariantCulture));
+                return true;
+            }
+            // detect alternate vector3 definition.
+            else if (rawvalue.Count(c => c == ' ') == 2 && rawvalue.All(c => " -.0123456789[]".Contains(c)))
+            {
+                string[] values = rawvalue.Replace("[","").Replace("]", "").Split(' ');
+                value = new VmfVector3(float.Parse(values[0], CultureInfo.InvariantCulture), float.Parse(values[1], CultureInfo.InvariantCulture), float.Parse(values[2], CultureInfo.InvariantCulture));
                 return true;
             }
             // detect floating point value.
@@ -323,6 +389,66 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 value = rawvalue;
                 return true;
             }
+        }
+
+        /// <summary>
+        /// Tries the parse displacement vector rows.
+        /// </summary>
+        /// <param name="line">The line (e.g. "row0" "0 0 1 0 0 1 0 0 1 0 0 -1 0 0 1").</param>
+        /// <param name="key">The key that was found.</param>
+        /// <param name="vectors">The list of vectors to add all results to.</param>
+        /// <returns>True when a vector row was read else false.</returns>
+        private bool TryParseVectorRow(string line, out string key, out List<VmfVector3> vectors)
+        {
+            key = "";
+            vectors = null;
+
+            if (!line.Contains('"')) return false;
+            int idx = line.IndexOf('"', 1);
+
+            key = line.Substring(1, idx - 1);
+            string rawvalue = line.Substring(idx + 3, line.Length - idx - 4);
+            if (rawvalue.Length == 0) return false;
+
+            // can only parse displacement rows.
+            if (!key.StartsWith("row")) return false;
+
+            vectors = new List<VmfVector3>();
+
+            string[] values = rawvalue.Split(' ');
+            for (int i = 0; i < values.Length; i += 3)
+                vectors.Add(new VmfVector3(float.Parse(values[i], CultureInfo.InvariantCulture), float.Parse(values[i+1], CultureInfo.InvariantCulture), float.Parse(values[i+2], CultureInfo.InvariantCulture)));
+            return true;
+        }
+
+        /// <summary>
+        /// Tries the parse displacement float rows.
+        /// </summary>
+        /// <param name="line">The line (e.g. "row0" "40 20 5 10 71.2452").</param>
+        /// <param name="key">The key that was found.</param>
+        /// <param name="vectors">The list of floats to add all results to.</param>
+        /// <returns>True when a float row was read else false.</returns>
+        private bool TryParseFloatRow(string line, out string key, out List<float> floats)
+        {
+            key = "";
+            floats = null;
+
+            if (!line.Contains('"')) return false;
+            int idx = line.IndexOf('"', 1);
+
+            key = line.Substring(1, idx - 1);
+            string rawvalue = line.Substring(idx + 3, line.Length - idx - 4);
+            if (rawvalue.Length == 0) return false;
+
+            // can only parse displacement rows.
+            if (!key.StartsWith("row")) return false;
+
+            floats = new List<float>();
+
+            string[] values = rawvalue.Split(' ');
+            for (int i = 0; i < values.Length; i ++)
+                floats.Add(float.Parse(values[i], CultureInfo.InvariantCulture));
+            return true;
         }
     }
 }
