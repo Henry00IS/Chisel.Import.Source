@@ -24,7 +24,6 @@
 
 using Chisel.Components;
 using Chisel.Core;
-using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -44,14 +43,8 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// <param name="world">The world to be imported.</param>
         public static void Import(ChiselModel model, VmfWorld world)
         {
-            //try
-            //{
             // create a material searcher to associate materials automatically.
             MaterialSearcher materialSearcher = new MaterialSearcher();
-
-            // group all the brushes together.
-            //!!!!!!!!!!!!!!!!! GroupBrush groupBrush = new GameObject("Source Engine Map").AddComponent<GroupBrush>();
-            //!!!!!!!!!!!!!!!!! groupBrush.transform.SetParent(model.transform);
 
             // iterate through all world solids.
             for (int i = 0; i < world.Solids.Count; i++)
@@ -148,27 +141,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                     clip.Flip();
                     brushMesh.Cut(clip, surface);
-
-                    // find the polygons associated with the clipping plane.
-
-                    // the normal is unique and can never occur twice as that wouldn't allow the solid to be convex.
-                    /*var polygons = pr.GetPolygons().Where(p => p.Plane.normal.EqualsWithEpsilonLower3(clip.normal));
-                    foreach (var polygon in polygons)
-                    {
-                        // calculate the texture coordinates.
-                        int w = 256;
-                        int h = 256;
-                        if (polygon.Material != null && polygon.Material.mainTexture != null)
-                        {
-                            w = polygon.Material.mainTexture.width;
-                            h = polygon.Material.mainTexture.height;
-                        }
-                        CalculateTextureCoordinates(pr, polygon, w, h, side.UAxis, side.VAxis);
-                    }*/
                 }
-
-                // add the brush to the group.
-                //!!!!!!!!!!!!!!!!! pr.transform.SetParent(groupBrush.transform);
             }
 
             // iterate through all entities.
@@ -317,50 +290,8 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     // collision only brushes.
                     //if (entity.ClassName == "func_vehicleclip")
                     //pr.IsVisible = false;
-
-                    // add the brush to the group.
-                    //!!!!!!!!!!!!!!!!! pr.transform.SetParent(groupBrush.transform);
                 }
             }
-
-#if UNITY_EDITOR
-            UnityEditor.EditorUtility.ClearProgressBar();
-#endif
-            //}
-            //catch (Exception)
-            //{
-            //    throw;
-            //}
-        }
-
-        private static Vector3 FindSelectionCenter(List<ChiselNode> selectedNodes)
-        {
-            if (selectedNodes == null || selectedNodes.Count == 0)
-                return Vector3.zero;
-
-            Vector3 center;
-            if (selectedNodes.Count > 1)
-            {
-                var bounds = selectedNodes[0].CalculateBounds();
-                var min = bounds.min;
-                var max = bounds.max;
-                for (int i = 1; i < selectedNodes.Count; i++)
-                {
-                    bounds = selectedNodes[i].CalculateBounds();
-
-                    min.x = Mathf.Min(min.x, bounds.min.x);
-                    min.y = Mathf.Min(min.y, bounds.min.y);
-                    min.z = Mathf.Min(min.z, bounds.min.z);
-
-                    max.x = Mathf.Max(max.x, bounds.max.x);
-                    max.y = Mathf.Max(max.y, bounds.max.y);
-                    max.z = Mathf.Max(max.z, bounds.max.z);
-                }
-                center = (min + max) * 0.5f;
-            }
-            else
-                center = selectedNodes[0].CalculateBounds().center;
-            return center;
         }
 
         private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)

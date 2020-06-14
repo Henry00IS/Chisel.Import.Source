@@ -22,10 +22,6 @@
 // SOFTWARE.
 ////////////////////// https://github.com/Henry00IS/ ////////////////// http://aeternumgames.com //
 
-using Chisel.Components;
-using Chisel.Core;
-using System.Collections.Generic;
-using Unity.Mathematics;
 using UnityEngine;
 
 namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006

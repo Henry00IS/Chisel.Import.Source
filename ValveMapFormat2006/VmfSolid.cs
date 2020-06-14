@@ -22,7 +22,6 @@
 // SOFTWARE.
 ////////////////////// https://github.com/Henry00IS/ ////////////////// http://aeternumgames.com //
 
-using System;
 using System.Collections.Generic;
 
 namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
