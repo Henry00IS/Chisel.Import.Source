@@ -70,7 +70,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         // add a light component:
                         Light light = go.AddComponent<Light>();
                         light.type = LightType.Point;
+#if UNITY_EDITOR
                         light.lightmapBakeType = LightmapBakeType.Baked;
+#endif
                         light.range = 25.0f;
                         
                         // set the light color:
@@ -102,7 +104,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         // add a light component:
                         Light light = go.AddComponent<Light>();
                         light.type = LightType.Spot;
+#if UNITY_EDITOR
                         light.lightmapBakeType = LightmapBakeType.Baked;
+#endif
                         light.range = 25.0f;
 
                         // set the light color:
