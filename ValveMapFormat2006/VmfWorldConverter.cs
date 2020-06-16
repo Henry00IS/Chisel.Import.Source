@@ -24,6 +24,8 @@
 
 using Chisel.Components;
 using Chisel.Core;
+using System;
+using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -35,6 +37,12 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
     public static class VmfWorldConverter
     {
         private const float inchesInMeters = 0.0254f;
+
+        private struct DisplacementSide
+        {
+            public VmfSolidSide side;
+            public ChiselSurface surface;
+        }
 
         /// <summary>
         /// Imports the specified world into the Chisel model.
@@ -71,6 +79,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 BrushMesh brushMesh = new BrushMesh();
                 go.definition.brushOutline = brushMesh;
                 BrushMeshFactory.CreateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
+
+                // prepare for any displacements.
+                List<DisplacementSide> DisplacementSurfaces = new List<DisplacementSide>();
 
                 // clip all the sides out of the brush.
                 for (int j = solid.Sides.Count; j-- > 0;)
@@ -141,6 +152,52 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                     clip.Flip();
                     brushMesh.Cut(clip, surface);
+
+                    // check whether this surface is a displacement.
+                    if (side.Displacement != null)
+                    {
+                        // disable the brush.
+                        go.gameObject.SetActive(false);
+
+                        // keep track of the surface used to cut the mesh.
+                        DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface });
+                    }
+                }
+
+                // build displacements.
+                foreach (DisplacementSide displacement in DisplacementSurfaces)
+                {
+                    // find the brush mesh polygon:
+                    for (int polyidx = 0; polyidx < brushMesh.polygons.Length; polyidx++)
+                    {
+                        if (brushMesh.polygons[polyidx].surface == displacement.surface)
+                        {
+                            // find the polygon plane.
+                            Plane plane = new Plane(brushMesh.planes[polyidx].xyz, brushMesh.planes[polyidx].w);
+
+                            // find all vertices that belong to this polygon:
+                            List<Vector3> vertices = new List<Vector3>();
+                            {
+                                var polygon = brushMesh.polygons[polyidx];
+                                var firstEdge = polygon.firstEdge;
+                                var edgeCount = polygon.edgeCount;
+                                var lastEdge = firstEdge + edgeCount;
+                                for (int e = firstEdge; e < lastEdge; e++)
+                                {
+                                    vertices.Add(brushMesh.vertices[brushMesh.halfEdges[e].vertexIndex]);
+                                }
+                            }
+                            // reverse the winding order.
+                            vertices.Reverse();
+
+                            var first = vertices[0];
+                            vertices.RemoveAt(0);
+                            vertices.Add(first);
+
+                            // build displacement:
+                            BuildDisplacementSurface(go, displacement.side, displacement.surface, vertices, plane);
+                        }
+                    }
                 }
             }
 
@@ -266,22 +323,6 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                         clip.Flip();
                         brushMesh.Cut(clip, surface);
-
-                        // find the polygons associated with the clipping plane.
-                        // the normal is unique and can never occur twice as that wouldn't allow the solid to be convex.
-                        /*var polygons = pr.GetPolygons().Where(p => p.Plane.normal.EqualsWithEpsilonLower3(clip.normal));
-                        foreach (var polygon in polygons)
-                        {
-                            // calculate the texture coordinates.
-                            int w = 256;
-                            int h = 256;
-                            if (polygon.Material != null && polygon.Material.mainTexture != null)
-                            {
-                                w = polygon.Material.mainTexture.width;
-                                h = polygon.Material.mainTexture.height;
-                            }
-                            CalculateTextureCoordinates(pr, polygon, w, h, side.UAxis, side.VAxis);
-                        }*/
                     }
 
                     // detail brushes that do not affect the CSG world.
@@ -392,6 +433,130 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     return true;
             }
             return false;
+        }
+
+        private static void BuildDisplacementSurface(ChiselBrush go, VmfSolidSide side, ChiselSurface surface, List<Vector3> vertices, Plane plane)
+        {
+            // create a new game object for the displacement.
+            GameObject dgo = new GameObject("Displacement");
+            dgo.transform.parent = go.transform.parent;
+            MeshRenderer meshRenderer = dgo.AddComponent<MeshRenderer>();
+            MeshFilter meshFilter = dgo.AddComponent<MeshFilter>();
+
+            // create a mesh.
+            Mesh mesh = new Mesh();
+
+            List<Vector3> meshVertices = new List<Vector3>();
+            List<Vector2> meshUVs = new List<Vector2>();
+            List<int> meshTriangles = new List<int>();
+
+            int power5 = 5;
+            int power4 = 4;
+
+            if (side.Displacement.Power == 2)
+            {
+                power5 = 5;
+                power4 = 4;
+            }
+            if (side.Displacement.Power == 3)
+            {
+                power5 = 9;
+                power4 = 8;
+            }
+            if (side.Displacement.Power == 4)
+            {
+                power5 = 17;
+                power4 = 16;
+            }
+
+            // rotate vertices until we have the start position in the bottom left corner.
+            VmfVector3 vmfStartPosition = side.Displacement.StartPosition;
+            Vector3 startPosition = new Vector3(vmfStartPosition.X, vmfStartPosition.Z, vmfStartPosition.Y) * inchesInMeters;
+
+            for (int i = 0; i < 4; i++)
+            {
+                var first = vertices[0];
+                if (Vector3.Distance(first, startPosition) < 0.01f)
+                    break;
+                vertices.RemoveAt(0);
+                vertices.Add(first);
+            }
+
+            var first2 = vertices[0];
+            vertices.RemoveAt(0);
+            vertices.Add(first2);
+
+            // create all of the vertices:
+            for (int z = 0; z < power5; z++)
+            {
+                for (int x = 0; x < power5; x++)
+                {
+                    // calculate vertex position (grid formation):
+                    Vector3 a = Vector3.Lerp(vertices[2], vertices[3], (1.0f / power4) * z);
+                    Vector3 cross = Vector3.Lerp(vertices[1], vertices[0], (1.0f / power4) * z);
+                    Vector3 b = Vector3.Lerp(a, cross, (1.0f / power4) * x);
+
+                    // calculate UVs:
+                    var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(plane.normal, plane.distance));
+                    var uvmatrix = surface.surfaceDescription.UV0.ToMatrix();
+                    uvmatrix *= localToPlaneSpace;
+                    meshUVs.Add(uvmatrix * b);
+
+                    // calculate offsets:
+                    VmfVector3 vmfOffset = side.Displacement.Offsets[power4 - z][x];
+                    Vector3 offset = new Vector3(vmfOffset.X * inchesInMeters, vmfOffset.Z * inchesInMeters, vmfOffset.Y * inchesInMeters);
+                    b += offset;
+
+                    // calculate normal to move the vertex along (displacement):
+                    VmfVector3 vmfNormal = side.Displacement.Normals[power4 - z][x];
+                    Vector3 normal = new Vector3(vmfNormal.X, vmfNormal.Z, vmfNormal.Y);
+
+                    //normal = Vector3.Project(normal, plane.normal);
+                    b += plane.normal * side.Displacement.Elevation * inchesInMeters;
+                    b += normal * side.Displacement.Distances[power4 - z][x] * inchesInMeters;
+
+                    meshVertices.Add(b);
+                }
+            }
+
+            // create the triangles in the same chessboard style as hammer:
+            int tri = 0;
+            for (int x = 0; x < (power4 * power4); x++)
+            {
+                tri = x + (x / power4);
+
+                if (tri % 2 == 0)
+                {
+                    meshTriangles.Add(0 + tri);
+                    meshTriangles.Add(power5 + 1 + tri);
+                    meshTriangles.Add(power5 + tri);
+
+                    meshTriangles.Add(0 + tri);
+                    meshTriangles.Add(1 + tri);
+                    meshTriangles.Add(power5 + 1 + tri);
+                }
+                else
+                {
+                    meshTriangles.Add(0 + tri);
+                    meshTriangles.Add(1 + tri);
+                    meshTriangles.Add(power5 + tri);
+
+                    meshTriangles.Add(1 + tri);
+                    meshTriangles.Add(power5 + 1 + tri);
+                    meshTriangles.Add(power5 + tri);
+                }
+            }
+
+            mesh.SetVertices(meshVertices);
+            mesh.SetUVs(0, meshUVs);
+            mesh.SetTriangles(meshTriangles, 0);
+
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+
+            meshFilter.sharedMesh = mesh;
+            meshRenderer.sharedMaterial = surface.brushMaterial.RenderMaterial;
         }
     }
 }
