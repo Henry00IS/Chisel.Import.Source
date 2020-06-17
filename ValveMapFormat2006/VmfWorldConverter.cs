@@ -53,6 +53,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         {
             // create a material searcher to associate materials automatically.
             MaterialSearcher materialSearcher = new MaterialSearcher();
+            HashSet<string> materialSearcherWarnings = new HashSet<string>();
 
             // iterate through all world solids.
             for (int i = 0; i < world.Solids.Count; i++)
@@ -105,14 +106,14 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
                         string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
                         material = materialSearcher.FindMaterial(new string[] { materialName, tiny });
-                        if (material == null)
+                        if (material == null && materialSearcherWarnings.Add(materialName))
                             Debug.Log("Chisel: Tried to find material '" + materialName + "' and also as '" + tiny + "' but it couldn't be found in the project.");
                     }
                     else
                     {
                         // only try finding 'BRICKWALL052D'.
                         material = materialSearcher.FindMaterial(new string[] { materialName });
-                        if (material == null)
+                        if (material == null && materialSearcherWarnings.Add(materialName))
                             Debug.Log("Chisel: Tried to find material '" + materialName + "' but it couldn't be found in the project.");
                     }
 
@@ -157,7 +158,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     if (side.Displacement != null)
                     {
                         // disable the brush.
-                        go.gameObject.SetActive(false);
+                        go.gameObject.GetComponent<ChiselBrush>().enabled = false;
 
                         // keep track of the surface used to cut the mesh.
                         DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface });
@@ -276,14 +277,14 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
                             string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
                             material = materialSearcher.FindMaterial(new string[] { materialName, tiny });
-                            if (material == null)
+                            if (material == null && materialSearcherWarnings.Add(materialName))
                                 Debug.Log("Chisel: Tried to find material '" + materialName + "' and also as '" + tiny + "' but it couldn't be found in the project.");
                         }
                         else
                         {
                             // only try finding 'BRICKWALL052D'.
                             material = materialSearcher.FindMaterial(new string[] { materialName });
-                            if (material == null)
+                            if (material == null && materialSearcherWarnings.Add(materialName))
                                 Debug.Log("Chisel: Tried to find material '" + materialName + "' but it couldn't be found in the project.");
                         }
 
@@ -439,7 +440,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         {
             // create a new game object for the displacement.
             GameObject dgo = new GameObject("Displacement");
-            dgo.transform.parent = go.transform.parent;
+            dgo.transform.parent = go.transform;
             MeshRenderer meshRenderer = dgo.AddComponent<MeshRenderer>();
             MeshFilter meshFilter = dgo.AddComponent<MeshFilter>();
 
@@ -551,7 +552,19 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             mesh.SetUVs(0, meshUVs);
             mesh.SetTriangles(meshTriangles, 0);
 
-            mesh.RecalculateBounds();
+            // center the mesh.
+            {
+                mesh.RecalculateBounds();
+                Vector3 meshCenter = mesh.bounds.center;
+                for (int i = 0; i < meshVertices.Count; i++)
+                {
+                    meshVertices[i] -= meshCenter;
+                }
+                mesh.SetVertices(meshVertices);
+                mesh.RecalculateBounds();
+                dgo.transform.position = meshCenter;
+            }
+
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();
 
