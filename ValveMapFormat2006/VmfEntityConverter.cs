@@ -103,7 +103,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 #if UNITY_EDITOR
                         light.lightmapBakeType = LightmapBakeType.Mixed;
 #endif
-                        light.range = 25.0f;
+                        light.range = 10.0f;
 
                         // set the light color:
                         if (entity.TryGetProperty("_light", out VmfVector4 color))

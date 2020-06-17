@@ -451,9 +451,11 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             dgo.transform.parent = go.transform;
             MeshRenderer meshRenderer = dgo.AddComponent<MeshRenderer>();
             MeshFilter meshFilter = dgo.AddComponent<MeshFilter>();
+            MeshCollider meshCollider = dgo.AddComponent<MeshCollider>();
 
             // create a mesh.
             Mesh mesh = new Mesh();
+            mesh.name = "Displacement";
 
             List<Vector3> meshVertices = new List<Vector3>();
             List<Vector2> meshUVs = new List<Vector2>();
@@ -577,6 +579,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             mesh.RecalculateTangents();
 
             meshFilter.sharedMesh = mesh;
+            meshCollider.sharedMesh = mesh;
             meshRenderer.sharedMaterial = surface.brushMaterial.RenderMaterial;
         }
     }

@@ -15,7 +15,7 @@
     "Importer"
   ],
   "unity": "2018.3",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "dependencies": {
     "com.unity.mathematics": "1.1.0",
     "com.chisel.core": "",
