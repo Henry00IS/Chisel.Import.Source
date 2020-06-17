@@ -12,8 +12,6 @@ After installing [Chisel](https://github.com/RadicalCSG/Chisel.Prototype), add t
 
 ## Import Examples:
 
-![t1](https://user-images.githubusercontent.com/7905726/40306113-a50dd11e-5cfd-11e8-9fef-872e7e52188d.png)
-
 ![d1_town_01](https://user-images.githubusercontent.com/7905726/84954049-f8267480-b0f4-11ea-8546-6a6eda22c210.png)
 
 ![d1_trainstation_02](https://user-images.githubusercontent.com/7905726/84954157-286e1300-b0f5-11ea-99f7-abd03f16c557.png)
