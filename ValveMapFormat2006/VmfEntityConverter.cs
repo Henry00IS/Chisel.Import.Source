@@ -101,7 +101,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         Light light = go.AddComponent<Light>();
                         light.type = LightType.Spot;
 #if UNITY_EDITOR
-                        light.lightmapBakeType = LightmapBakeType.Baked;
+                        light.lightmapBakeType = LightmapBakeType.Mixed;
 #endif
                         light.range = 25.0f;
 

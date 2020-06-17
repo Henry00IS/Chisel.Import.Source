@@ -200,6 +200,11 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         }
                     }
                 }
+
+                // finalize the brush by snapping planes and centering the pivot point.
+                go.transform.position += brushMesh.CenterAndSnapPlanes();
+                foreach (Transform child in go.transform)
+                    child.position -= go.transform.position;
             }
 
             // iterate through all entities.
@@ -325,6 +330,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         clip.Flip();
                         brushMesh.Cut(clip, surface);
                     }
+
+                    // finalize the brush by snapping planes and centering the pivot point.
+                    go.transform.position += brushMesh.CenterAndSnapPlanes();
 
                     // detail brushes that do not affect the CSG world.
                     //if (entity.ClassName == "func_detail")
