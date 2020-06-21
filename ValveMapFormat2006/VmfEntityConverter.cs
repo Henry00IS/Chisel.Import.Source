@@ -31,7 +31,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
     /// </summary>
     public static class VmfEntityConverter
     {
-        private const float inchesInMeters = 0.0625f; // == 1.0f/16.0f as per source-sdk-2013.
+        private const float inchesInMeters = 0.03125f; // == 1.0f/16.0f as per source-sdk-2013 but halved to 1.0f/32.0f as it's too big for Unity.
         private const float lightBrightnessScalar = 0.005f;
 
         /// <summary>

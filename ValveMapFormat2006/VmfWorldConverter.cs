@@ -36,7 +36,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
     /// </summary>
     public static class VmfWorldConverter
     {
-        private const float inchesInMeters = 0.0625f; // == 1.0f/16.0f as per source-sdk-2013.
+        private const float inchesInMeters = 0.03125f; // == 1.0f/16.0f as per source-sdk-2013 but halved to 1.0f/32.0f as it's too big for Unity.
 
         private struct DisplacementSide
         {
@@ -83,6 +83,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
                 // prepare for any displacements.
                 List<DisplacementSide> DisplacementSurfaces = new List<DisplacementSide>();
+
+                // prepare for uv calculations of clip planes after cutting.
+                var planes = new float4[solid.Sides.Count];
 
                 // clip all the sides out of the brush.
                 for (int j = solid.Sides.Count; j-- > 0;)
@@ -140,17 +143,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
                     }
 
-                    // calculate the texture coordinates.
-                    int w = 256;
-                    int h = 256;
-                    if (material.mainTexture != null)
-                    {
-                        w = material.mainTexture.width;
-                        h = material.mainTexture.height;
-                    }
-
+                    // clip the brush.
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+                    planes[j] = new float4(clip.normal, clip.distance);
                     clip.Flip();
                     brushMesh.Cut(clip, surface);
 
@@ -163,6 +158,46 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         // keep track of the surface used to cut the mesh.
                         DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface });
                     }
+                }
+
+                // now iterate over the planes to calculate UV coordinates.
+                int[] indices = new int[solid.Sides.Count];
+                for (int k = 0; k < planes.Length; k++)
+                {
+                    var plane = planes[k];
+                    int closestIndex = 0;
+                    float closestDistance = math.lengthsq(plane - brushMesh.planes[0]);
+                    for (int j = 1; j < brushMesh.planes.Length; j++)
+                    {
+                        float testDistance = math.lengthsq(plane - brushMesh.planes[j]);
+                        if (testDistance < closestDistance)
+                        {
+                            closestIndex = j;
+                            closestDistance = testDistance;
+                        }
+                    }
+                    indices[k] = closestIndex;
+                }
+
+                for (int j = 0; j < indices.Length; j++)
+                    brushMesh.planes[indices[j]] = planes[j];
+
+                for (int j = solid.Sides.Count; j-- > 0;)
+                {
+                    VmfSolidSide side = solid.Sides[j];
+                    var surface = brushMesh.polygons[indices[j]].surface;
+                    var material = surface.brushMaterial.RenderMaterial;
+
+                    // calculate the texture coordinates.
+                    int w = 256;
+                    int h = 256;
+                    if (material.mainTexture != null)
+                    {
+                        w = material.mainTexture.width;
+                        h = material.mainTexture.height;
+                    }
+                    var clip = new Plane(planes[j].xyz, planes[j].w);
+                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
                 }
 
                 // build displacements.
@@ -260,6 +295,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     go.definition.brushOutline = brushMesh;
                     BrushMeshFactory.CreateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
 
+                    // prepare for uv calculations of clip planes after cutting.
+                    var planes = new float4[solid.Sides.Count];
+
                     // clip all the sides out of the brush.
                     for (int j = solid.Sides.Count; j-- > 0;)
                     {
@@ -316,6 +354,41 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
                         }
 
+                        // clip the brush.
+                        Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
+                        planes[j] = new float4(clip.normal, clip.distance);
+                        clip.Flip();
+                        brushMesh.Cut(clip, surface);
+                    }
+
+                    // now iterate over the planes to calculate UV coordinates.
+                    int[] indices = new int[solid.Sides.Count];
+                    for (int k = 0; k < planes.Length; k++)
+                    {
+                        var plane = planes[k];
+                        int closestIndex = 0;
+                        float closestDistance = math.lengthsq(plane - brushMesh.planes[0]);
+                        for (int j = 1; j < brushMesh.planes.Length; j++)
+                        {
+                            float testDistance = math.lengthsq(plane - brushMesh.planes[j]);
+                            if (testDistance < closestDistance)
+                            {
+                                closestIndex = j;
+                                closestDistance = testDistance;
+                            }
+                        }
+                        indices[k] = closestIndex;
+                    }
+
+                    for (int j = 0; j < indices.Length; j++)
+                        brushMesh.planes[indices[j]] = planes[j];
+
+                    for (int j = solid.Sides.Count; j-- > 0;)
+                    {
+                        VmfSolidSide side = solid.Sides[j];
+                        var surface = brushMesh.polygons[indices[j]].surface;
+                        var material = surface.brushMaterial.RenderMaterial;
+
                         // calculate the texture coordinates.
                         int w = 256;
                         int h = 256;
@@ -324,11 +397,8 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             w = material.mainTexture.width;
                             h = material.mainTexture.height;
                         }
-
-                        Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
+                        var clip = new Plane(planes[j].xyz, planes[j].w);
                         CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
-                        clip.Flip();
-                        brushMesh.Cut(clip, surface);
                     }
 
                     // finalize the brush by snapping planes and centering the pivot point.
@@ -346,7 +416,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
         private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
         {
-            var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(clip.normal, clip.distance));
+            var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(clip.normal, clip.distance));
             var planeSpaceToLocal = (Matrix4x4)math.inverse(localToPlaneSpace);
 
             UAxis.Translation %= textureWidth;
