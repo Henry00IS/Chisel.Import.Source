@@ -36,7 +36,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
     /// </summary>
     public static class VmfWorldConverter
     {
-        private const float inchesInMeters = 0.0254f;
+        private const float inchesInMeters = 0.0625f; // == 1.0f/16.0f as per source-sdk-2013.
 
         private struct DisplacementSide
         {
