@@ -325,11 +325,16 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             value = null;
 
             if (!line.Contains('"')) return false;
+            if (line.Count(c => c == '"') != 4) return false; // fixes 'ep1_c17_03.vmf' "rulescript" with newline in the value.
             int idx = line.IndexOf('"', 1);
 
             key = line.Substring(1, idx - 1);
             string rawvalue = line.Substring(idx + 3, line.Length - idx - 4);
             if (rawvalue.Length == 0) return false;
+
+            string rawvalue_string = rawvalue;
+            rawvalue = rawvalue.Replace("--", "-"); // fixes 'd2_coast_05.vmf' with "-8 --64 -64" double negative.
+            rawvalue = System.Text.RegularExpressions.Regex.Replace(rawvalue, @"\s+", " "); // fixes 'd2_prison_07.vmf' having two spaces in a vector declaration.
 
             int vi;
             float vf;
@@ -365,9 +370,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 return true;
             }
             // detect alternate vector3 definition.
-            else if (rawvalue.Count(c => c == ' ') == 2 && rawvalue.All(c => " -.0123456789[]".Contains(c)))
+            else if (rawvalue.Count(c => c == ' ') == 2 && rawvalue.All(c => " e-.0123456789[]".Contains(c))) // "e" exponent occurs here fixing 'ep2_outland_07_barn.vmf'.
             {
-                string[] values = rawvalue.Replace("[","").Replace("]", "").Split(' ');
+                string[] values = rawvalue.Replace("[", "").Replace("]", "").Split(' ');
                 value = new VmfVector3(float.Parse(values[0], CultureInfo.InvariantCulture), float.Parse(values[1], CultureInfo.InvariantCulture), float.Parse(values[2], CultureInfo.InvariantCulture));
                 return true;
             }
@@ -386,7 +391,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             // probably a string value.
             else
             {
-                value = rawvalue;
+                value = rawvalue_string;
                 return true;
             }
         }
