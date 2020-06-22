@@ -581,7 +581,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(plane.normal, plane.distance));
                     var uvmatrix = surface.surfaceDescription.UV0.ToMatrix();
                     uvmatrix *= localToPlaneSpace;
-                    meshUVs.Add(uvmatrix * b);
+                    meshUVs.Add(uvmatrix.MultiplyPoint(b));
 
                     // calculate offsets:
                     VmfVector3 vmfOffset = side.Displacement.Offsets[power4 - z][x];
