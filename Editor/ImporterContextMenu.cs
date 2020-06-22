@@ -37,6 +37,7 @@ namespace AeternumGames.Chisel.Import.Source.Editor
         [MenuItem("GameObject/Chisel/Import/Valve Map Format 2006...")]
         private static void ImportValveMapFormat2006()
         {
+            GameObject go = null;
             try
             {
                 string path = EditorUtility.OpenFilePanel("Import Source Engine Map", "", "vmf");
@@ -47,7 +48,8 @@ namespace AeternumGames.Chisel.Import.Source.Editor
                     var map = importer.Import(path);
 
                     // create parent game object to store all of the imported content.
-                    GameObject go = new GameObject("Source Map - " + Path.GetFileNameWithoutExtension(path));
+                    go = new GameObject("Source Map - " + Path.GetFileNameWithoutExtension(path));
+                    go.SetActive(false);
 
                     // create chisel model and import all of the brushes.
                     EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Preparing Material Searcher...", 0.0f);
@@ -61,6 +63,10 @@ namespace AeternumGames.Chisel.Import.Source.Editor
             {
                 EditorUtility.ClearProgressBar();
                 EditorUtility.DisplayDialog("Source Engine Map Import", "An exception occurred while importing the map:\r\n" + ex.Message, "Ohno!");
+            }
+            finally
+            {
+                if (go != null) go.SetActive(true);
             }
         }
     }
