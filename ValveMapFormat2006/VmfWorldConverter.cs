@@ -86,8 +86,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
                 // prepare for uv calculations of clip planes after cutting.
                 var planes = new float4[solid.Sides.Count];
+                var planeSurfaces = new ChiselSurface[solid.Sides.Count];
 
-                // clip all the sides out of the brush.
+                // compute all the sides of the brush that will be clipped.
                 for (int j = solid.Sides.Count; j-- > 0;)
                 {
                     VmfSolidSide side = solid.Sides[j];
@@ -143,11 +144,10 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
                     }
 
-                    // clip the brush.
+                    // calculate the clipping planes.
                     Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
                     planes[j] = new float4(clip.normal, clip.distance);
-                    clip.Flip();
-                    brushMesh.Cut(clip, surface);
+                    planeSurfaces[j] = surface;
 
                     // check whether this surface is a displacement.
                     if (side.Displacement != null)
@@ -159,6 +159,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface });
                     }
                 }
+
+                // cut all the clipping planes out of the brush in one go.
+                brushMesh.Cut(planes, planeSurfaces);
 
                 // now iterate over the planes to calculate UV coordinates.
                 int[] indices = new int[solid.Sides.Count];
@@ -297,6 +300,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
                     // prepare for uv calculations of clip planes after cutting.
                     var planes = new float4[solid.Sides.Count];
+                    var planeSurfaces = new ChiselSurface[solid.Sides.Count];
 
                     // clip all the sides out of the brush.
                     for (int j = solid.Sides.Count; j-- > 0;)
@@ -354,12 +358,14 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
                         }
 
-                        // clip the brush.
+                        // calculate the clipping planes.
                         Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
                         planes[j] = new float4(clip.normal, clip.distance);
-                        clip.Flip();
-                        brushMesh.Cut(clip, surface);
+                        planeSurfaces[j] = surface;
                     }
+
+                    // cut all the clipping planes out of the brush in one go.
+                    brushMesh.Cut(planes, planeSurfaces);
 
                     // now iterate over the planes to calculate UV coordinates.
                     int[] indices = new int[solid.Sides.Count];
