@@ -23,6 +23,11 @@
 ////////////////////// https://github.com/Henry00IS/ ////////////////// http://aeternumgames.com //
 
 using UnityEngine;
+using System.Collections.Generic;
+
+#if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
+using AeternumGames.Chisel.Decals;
+#endif
 
 namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 {
@@ -41,6 +46,11 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// <param name="world">The world to be imported.</param>
         public static void Import(Transform parent, VmfWorld world)
         {
+#if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
+            // create a material searcher to associate materials automatically.
+            MaterialSearcher materialSearcher = new MaterialSearcher();
+            HashSet<string> materialSearcherWarnings = new HashSet<string>();
+#endif
             // iterate through all entities.
             for (int e = 0; e < world.Entities.Count; e++)
             {
@@ -120,6 +130,61 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
                         break;
                     }
+
+#if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
+                    case "infodecal":
+                    {
+                        // create a new decal object:
+                        GameObject go = new GameObject("Decal");
+                        go.transform.parent = GetDecalsGroupOrCreate(parent);
+
+                        // set the object position:
+                        if (TryGetEntityOrigin(entity, out Vector3 origin))
+                            go.transform.position = origin;
+
+                        // add the decal component:
+                        ChiselDecal decal = go.AddComponent<ChiselDecal>();
+
+                        // assign the material:
+                        if (entity.TryGetProperty("texture", out string texture))
+                        {
+                            Material material = FindMaterial(materialSearcher, materialSearcherWarnings, texture);
+                            if (material != null)
+                                go.GetComponent<MeshRenderer>().sharedMaterial = material;
+                        }
+
+                        // it should be snug against a surface- so we try to find it.
+                        RaycastHit raycastHit = default;
+                        bool hit = false;
+
+                        Vector3 r = Vector3.right * 0.2f;
+                        Vector3 f = Vector3.forward * 0.2f;
+                        Vector3 u = Vector3.up * 0.2f;
+
+                        // try a sphere cast in all world axis to find a hit.
+                        if (hit = Physics.SphereCast(go.transform.position - r, 0.1f, r * 2.0f, out RaycastHit hitInfo1))
+                            raycastHit = hitInfo1;
+                        if (!hit && (hit = Physics.SphereCast(go.transform.position + r, 0.1f, -r * 2.0f, out RaycastHit hitInfo2)))
+                            raycastHit = hitInfo2;
+                        if (!hit && (hit = Physics.SphereCast(go.transform.position - f, 0.1f, f * 2.0f, out RaycastHit hitInfo3)))
+                            raycastHit = hitInfo3;
+                        if (!hit && (hit = Physics.SphereCast(go.transform.position + f, 0.1f, -f * 2.0f, out RaycastHit hitInfo4)))
+                            raycastHit = hitInfo4;
+                        if (!hit && (hit = Physics.SphereCast(go.transform.position - u, 0.1f, u * 2.0f, out RaycastHit hitInfo5)))
+                            raycastHit = hitInfo5;
+                        if (!hit && (hit = Physics.SphereCast(go.transform.position + u, 0.1f, -u * 2.0f, out RaycastHit hitInfo6)))
+                            raycastHit = hitInfo6;
+
+                        // shouldn't not hit unless the level designer actually messed up.
+                        if (hit)
+                        {
+                            // now we have the normal of the surface to "face align" the decal.
+                            go.transform.rotation = Quaternion.LookRotation(-raycastHit.normal);
+                        }
+
+                        break;
+                    }
+#endif
                 }
             }
         }
@@ -141,6 +206,24 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             return lighting;
         }
 
+#if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
+        /// <summary>
+        /// Gets the decals group transform or creates it.
+        /// </summary>
+        /// <param name="parent">The parent to create the decals group under.</param>
+        /// <returns>The transform of the decals group</returns>
+        private static Transform GetDecalsGroupOrCreate(Transform parent)
+        {
+            Transform lighting = parent.Find("Decals");
+            if (lighting == null)
+            {
+                lighting = new GameObject("Decals").transform;
+                lighting.transform.parent = parent;
+                return lighting;
+            }
+            return lighting;
+        }
+#endif
         private static bool TryGetEntityOrigin(VmfEntity entity, out Vector3 result)
         {
             result = default;
@@ -171,5 +254,33 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             }
             return success;
         }
+
+#if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
+        private static Material FindMaterial(MaterialSearcher materialSearcher, HashSet<string> materialSearcherWarnings, string name)
+        {
+            // find the material in the unity project automatically.
+            Material material;
+
+            // try finding the fully qualified texture name with '/' replaced by '.' so 'BRICK.BRICKWALL052D'.
+            string materialName = name.Replace("/", ".");
+            if (materialName.Contains("."))
+            {
+                // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
+                string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
+                material = materialSearcher.FindMaterial(new string[] { materialName, tiny });
+                if (material == null && materialSearcherWarnings.Add(materialName))
+                    Debug.Log("Chisel: Tried to find material '" + materialName + "' and also as '" + tiny + "' but it couldn't be found in the project.");
+            }
+            else
+            {
+                // only try finding 'BRICKWALL052D'.
+                material = materialSearcher.FindMaterial(new string[] { materialName });
+                if (material == null && materialSearcherWarnings.Add(materialName))
+                    Debug.Log("Chisel: Tried to find material '" + materialName + "' but it couldn't be found in the project.");
+            }
+
+            return material;
+        }
+#endif
     }
 }

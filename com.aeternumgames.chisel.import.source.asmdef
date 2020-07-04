@@ -4,7 +4,8 @@
     "references": [
         "com.chisel.core",
         "com.chisel.components",
-        "Unity.Mathematics"
+        "Unity.Mathematics",
+        "com.aeternumgames.chisel.decals"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -13,6 +14,12 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.aeternumgames.chisel.decals",
+            "expression": "0.0.0",
+            "define": "COM_AETERNUMGAMES_CHISEL_DECALS"
+        }
+    ],
     "noEngineReferences": false
 }
