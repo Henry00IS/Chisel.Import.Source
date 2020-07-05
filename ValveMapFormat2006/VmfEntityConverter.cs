@@ -157,22 +157,22 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         RaycastHit raycastHit = default;
                         bool hit = false;
 
-                        Vector3 r = Vector3.right * 0.2f;
-                        Vector3 f = Vector3.forward * 0.2f;
-                        Vector3 u = Vector3.up * 0.2f;
+                        Vector3 r = Vector3.right * 0.1f;
+                        Vector3 f = Vector3.forward * 0.1f;
+                        Vector3 u = Vector3.up * 0.1f;
 
                         // try a sphere cast in all world axis to find a hit.
-                        if (hit = Physics.SphereCast(go.transform.position - r, 0.1f, r * 2.0f, out RaycastHit hitInfo1))
+                        if (hit = Physics.Raycast(go.transform.position - r, r, out RaycastHit hitInfo1, 0.2f))
                             raycastHit = hitInfo1;
-                        if (!hit && (hit = Physics.SphereCast(go.transform.position + r, 0.1f, -r * 2.0f, out RaycastHit hitInfo2)))
+                        if (!hit && (hit = Physics.Raycast(go.transform.position + r, -r, out RaycastHit hitInfo2, 0.2f)))
                             raycastHit = hitInfo2;
-                        if (!hit && (hit = Physics.SphereCast(go.transform.position - f, 0.1f, f * 2.0f, out RaycastHit hitInfo3)))
+                        if (!hit && (hit = Physics.Raycast(go.transform.position - f, f, out RaycastHit hitInfo3, 0.2f)))
                             raycastHit = hitInfo3;
-                        if (!hit && (hit = Physics.SphereCast(go.transform.position + f, 0.1f, -f * 2.0f, out RaycastHit hitInfo4)))
+                        if (!hit && (hit = Physics.Raycast(go.transform.position + f, -f, out RaycastHit hitInfo4, 0.2f)))
                             raycastHit = hitInfo4;
-                        if (!hit && (hit = Physics.SphereCast(go.transform.position - u, 0.1f, u * 2.0f, out RaycastHit hitInfo5)))
+                        if (!hit && (hit = Physics.Raycast(go.transform.position - u, u, out RaycastHit hitInfo5, 0.2f)))
                             raycastHit = hitInfo5;
-                        if (!hit && (hit = Physics.SphereCast(go.transform.position + u, 0.1f, -u * 2.0f, out RaycastHit hitInfo6)))
+                        if (!hit && (hit = Physics.Raycast(go.transform.position + u, -u, out RaycastHit hitInfo6, 0.2f)))
                             raycastHit = hitInfo6;
 
                         // shouldn't not hit unless the level designer actually messed up.
