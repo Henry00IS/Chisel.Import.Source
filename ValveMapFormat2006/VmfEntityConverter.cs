@@ -150,7 +150,15 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         {
                             Material material = FindMaterial(materialSearcher, materialSearcherWarnings, texture);
                             if (material != null)
+                            {
                                 go.GetComponent<MeshRenderer>().sharedMaterial = material;
+                                var mainTexture = material.mainTexture;
+                                if (mainTexture != null)
+                                {
+                                    // use the texture size to determine the size of the decal.
+                                    go.transform.localScale = new Vector3(mainTexture.width * 0.008f, mainTexture.height * 0.008f, 0.1f);
+                                }
+                            }
                         }
 
                         // it should be snug against a surface- so we try to find it.
@@ -161,7 +169,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         Vector3 f = Vector3.forward * 0.1f;
                         Vector3 u = Vector3.up * 0.1f;
 
-                        // try a sphere cast in all world axis to find a hit.
+                        // try a ray cast in all world axis to find a hit.
                         if (hit = Physics.Raycast(go.transform.position - r, r, out RaycastHit hitInfo1, 0.2f))
                             raycastHit = hitInfo1;
                         if (!hit && (hit = Physics.Raycast(go.transform.position + r, -r, out RaycastHit hitInfo2, 0.2f)))
