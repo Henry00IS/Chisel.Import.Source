@@ -72,6 +72,7 @@ namespace AeternumGames.Chisel.Import.Source.Editor
             }
             finally
             {
+                EditorUtility.ClearProgressBar();
                 if (go != null) go.SetActive(true);
             }
         }
