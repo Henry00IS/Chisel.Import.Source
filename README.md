@@ -21,13 +21,14 @@ After installing [Chisel](https://github.com/RadicalCSG/Chisel.Prototype), add t
 - Converts Hammer solids into Chisel brushes.
 - Imports displacements as additional meshes.
 - Imports lights converted into their Unity equivalents.
+- Imports decals as additional meshes (requires [Chisel Decals](https://github.com/Henry00IS/Chisel.Decals)).
 - Automatically finds the map materials in your project.
 - Texture UVs are 98% accurate.
 - Maps are completely editable after import.
 
 ## Donations:
 
-If you found this importer useful and wish to say thanks then please feel free to make a donation. Your donations are a huge motivator to continue the development and support of this importer. 😁
+If you found this importer useful and wish to say thanks, then please feel free to make a donation. Your donations are a huge motivator to continue the development and support of this importer. 😁
 
 [![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://paypal.me/henrydejongh)
 

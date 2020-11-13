@@ -122,10 +122,32 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             light.color = new Color(color.X / 255.0f, color.Y / 255.0f, color.Z / 255.0f);
                         }
 
-                        // set the spot angle:
-                        if (entity.TryGetProperty("_cone", out int cone))
+                        // approximate the light cookie cone shape and the spot angle.
+                        if (entity.TryGetProperty("_inner_cone", out int inner_cone) && entity.TryGetProperty("_cone", out int cone))
                         {
-                            light.spotAngle = cone;
+                            float lightInnerCone = Mathf.Min(inner_cone * 2, 175);
+                            float lightCone = Mathf.Min(cone * 2, 175);
+
+                            if (lightInnerCone > lightCone)
+                            {
+                                float t = lightCone;
+                                lightInnerCone = lightCone;
+                                lightCone = t;
+                            }
+
+                            // set the spot angle:
+                            light.spotAngle = lightCone;
+
+                            // generate and set the light cookie:
+                            float coneFactor = Mathf.Max(0, lightInnerCone / lightCone);
+                            light.cookie = BuildLightCookieTexture(coneFactor);
+                        }
+                        // backup approach for the spot angle.
+                        else if (entity.TryGetProperty("_cone", out int cone2))
+                        {
+                            // set the spot angle:
+                            float lightCone = Mathf.Min(cone2 * 2, 175);
+                            light.spotAngle = lightCone;
                         }
 
                         break;
@@ -261,6 +283,40 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 success = true;
             }
             return success;
+        }
+
+        private static Texture2D BuildLightCookieTexture(float coneFactor)
+        {
+            var width = 64;
+            var height = 64;
+            Texture2D cookieTexture = new Texture2D(width, height, TextureFormat.Alpha8, false);
+            cookieTexture.name = "Light Cookie";
+            Color32[] colors = new Color32[height * width];
+
+            var halfWidth = width / 2.0f;
+            var halfHeight = height / 2.0f;
+            var maxDistance = (halfWidth - 1) * (halfHeight - 1);
+            var minDistance = coneFactor * maxDistance;
+            for (int y = 0, o = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++, o++)
+                {
+                    var distancex = (x - halfWidth);
+                    var distancey = (y - halfHeight);
+                    var distanceSqr = Mathf.Min(maxDistance, (distancex * distancex) + (distancey * distancey));
+                    var factor = (distanceSqr - minDistance) / (maxDistance - minDistance);
+                    var factorb = (byte)Mathf.Lerp(255, 0, Mathf.Clamp01(factor));
+                    colors[o].r = 255;
+                    colors[o].g = 255;
+                    colors[o].b = 255;
+                    colors[o].a = factorb;
+                }
+            }
+            cookieTexture.wrapMode = TextureWrapMode.Clamp;
+            cookieTexture.SetPixels32(colors, 0);
+            cookieTexture.Apply();
+
+            return cookieTexture;
         }
 
 #if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
