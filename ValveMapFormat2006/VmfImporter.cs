@@ -48,7 +48,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
             // open the file for reading. we use streams for additional performance.
             // it's faster than File.ReadAllLines() as that requires two iterations.
-            using (FileStream stream = new FileStream(path, FileMode.Open))
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read))
             using (StreamReader reader = new StreamReader(stream))
             {
                 // read all the lines from the file.
