@@ -36,7 +36,6 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
     /// </summary>
     public static class VmfEntityConverter
     {
-        private const float inchesInMeters = 0.03125f; // == 1.0f/16.0f as per source-sdk-2013 but halved to 1.0f/32.0f as it's too big for Unity.
         private const float lightBrightnessScalar = 0.005f;
 
         /// <summary>
@@ -259,7 +258,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             result = default;
             if (entity.TryGetProperty("origin", out VmfVector3 v))
             {
-                result = new Vector3(v.X * inchesInMeters, v.Z * inchesInMeters, v.Y * inchesInMeters);
+                result = VmfWorldConverter.Swizzle(v) * VmfWorldConverter.inchesInMeters;
                 return true;
             }
             return false;
