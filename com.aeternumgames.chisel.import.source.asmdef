@@ -3,9 +3,8 @@
     "rootNamespace": "",
     "references": [
         "com.chisel.core",
-        "com.chisel.components",
         "Unity.Mathematics",
-        "com.aeternumgames.chisel.decals"
+        "com.chisel.unity.components"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

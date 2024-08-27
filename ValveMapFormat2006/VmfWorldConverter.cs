@@ -35,28 +35,118 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
     /// Converts a Hammer Map to Chisel Brushes.
     /// </summary>
     public static class VmfWorldConverter
-    {
-        private const float inchesInMeters = 0.03125f; // == 1.0f/16.0f as per source-sdk-2013 but halved to 1.0f/32.0f as it's too big for Unity.
+	{
+		public const float inchesInMeters = 0.03125f; // == 1.0f/16.0f as per source-sdk-2013 but halved to 1.0f/32.0f as it's too big for Unity.
 
-        private struct DisplacementSide
-        {
-            public VmfSolidSide side;
-            public ChiselSurface surface;
-        }
+		private struct DisplacementSide
+		{
+			public VmfSolidSide side;
+			public ChiselSurface surface;
+			public int descriptionIndex;
+		}
+
+		public static Vector3 Swizzle(Vector3 input) { return new Vector3(-input.x, input.z, -input.y); }
+        public static Vector3 Swizzle(VmfVector3 input) { return new Vector3(-input.X, input.Z, -input.Y); }
+		public static Vector3 Unswizzle(Vector3 input) { return new Vector3(-input.x, -input.z, input.y); }
+		public static Vector3 Unswizzle(VmfVector3 input) { return new Vector3(-input.X, -input.Z, input.Y); }
+
+
+		static decimal Sqrt(decimal x, decimal epsilon = 0.000000000000000001M)
+		{
+			var current = (decimal)math.sqrt((double)x);
+			decimal previous;
+			do
+			{
+				previous = current;
+				if (previous == 0.0M) return 0;
+				current = (previous + x / previous) / 2;
+			} while (Math.Abs(previous - current) > epsilon);
+			return current;
+		}
+
+		public static UnityEngine.Plane VmfPointsToUnityPlane(VmfPlane input)
+		{
+			//*
+			var p0 = Swizzle(input.P1);
+			var p1 = Swizzle(input.P2);
+			var p2 = Swizzle(input.P3);
+
+			var p0x = (decimal)p0.x;
+			var p0y = (decimal)p0.y;
+			var p0z = (decimal)p0.z;
+
+			var p1x = (decimal)p1.x;
+			var p1y = (decimal)p1.y;
+			var p1z = (decimal)p1.z;
+
+			var p2x = (decimal)p2.x;
+			var p2y = (decimal)p2.y;
+			var p2z = (decimal)p2.z;
+
+			var ax = p0x;
+			var ay = p0y;
+			var az = p0z;
+
+			var bx = p1x;
+			var by = p1y;
+			var bz = p1z;
+
+			var cx = p2x;
+			var cy = p2y;
+			var cz = p2z;
+
+			var abx = (bx - ax);
+			var aby = (by - ay);
+			var abz = (bz - az);
+
+			var acx = (cx - ax);
+			var acy = (cy - ay);
+			var acz = (cz - az);
+
+			var normalx = aby * acz - abz * acy;
+			var normaly = abz * acx - abx * acz;
+			var normalz = abx * acy - aby * acx;
+
+			var sqrmagnitude	= (normalx * normalx) + (normaly * normaly) + (normalz * normalz);
+			var magnitude		= Sqrt(sqrmagnitude);
+
+			normalx /= magnitude;
+			normaly /= magnitude;
+			normalz /= magnitude;
+
+			var a = normalx;
+			var b = normaly;
+			var c = normalz;
+			var d = ((normalx * p1x) + (normaly * p1y) + (normalz * p1z)) * (Decimal)inchesInMeters;
+
+
+			UnityEngine.Plane plane = new UnityEngine.Plane();
+			plane.distance = (float)-d;
+			plane.normal = new Vector3((float)a, (float)b, (float)c);
+			/*/
+			UnityEngine.Plane plane;
+			plane = new UnityEngine.Plane(SourceEngineUnits.Swizzle(points[0]),
+										  SourceEngineUnits.Swizzle(points[1]),
+										  SourceEngineUnits.Swizzle(points[2]));
+			plane.distance /= VmfMeters;
+			//*/
+			return plane;
+		}
 
         /// <summary>
         /// Imports the specified world into the Chisel model.
         /// </summary>
         /// <param name="model">The model to import into.</param>
         /// <param name="world">The world to be imported.</param>
-        public static void Import(ChiselModel model, VmfWorld world)
+        public static void Import(ChiselModelComponent model, VmfWorld world)
         {
             // create a material searcher to associate materials automatically.
             MaterialSearcher materialSearcher = new MaterialSearcher();
             HashSet<string> materialSearcherWarnings = new HashSet<string>();
+			List<DisplacementSide> DisplacementSurfaces = new List<DisplacementSide>();
 
-            // iterate through all world solids.
-            for (int i = 0; i < world.Solids.Count; i++)
+			// iterate through all world solids.
+			for (int i = 0; i < world.Solids.Count; i++)
             {
 #if UNITY_EDITOR
                 UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map (1/3)", "Converting Hammer Solids To Chisel Brushes (" + (i + 1) + " / " + world.Solids.Count + ")...", i / (float)world.Solids.Count);
@@ -73,24 +163,39 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     continue;
                 // HACK: Fix me in the future!
 
-                // build a very large cube brush.
-                ChiselBrush go = ChiselComponentFactory.Create<ChiselBrush>(model);
-                go.definition.surfaceDefinition = new ChiselSurfaceDefinition();
-                go.definition.surfaceDefinition.EnsureSize(6);
-                BrushMesh brushMesh = new BrushMesh();
-                go.definition.brushOutline = brushMesh;
-                BrushMeshFactory.CreateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
+
 
                 // prepare for any displacements.
-                List<DisplacementSide> DisplacementSurfaces = new List<DisplacementSide>();
+                DisplacementSurfaces.Clear();
 
                 // prepare for uv calculations of clip planes after cutting.
                 var planes = new float4[solid.Sides.Count];
                 var planeSurfaces = new ChiselSurface[solid.Sides.Count];
 
-                // compute all the sides of the brush that will be clipped.
-                for (int j = solid.Sides.Count; j-- > 0;)
-                {
+				var center = Vector3.zero;
+				for (int j = 0; j < solid.Sides.Count; j++)
+				{
+					center.x += solid.Sides[j].Plane.P1.X;
+					center.y += solid.Sides[j].Plane.P1.Y;
+					center.z += solid.Sides[j].Plane.P1.Z;
+
+					center.x += solid.Sides[j].Plane.P2.X;
+					center.y += solid.Sides[j].Plane.P2.Y;
+					center.z += solid.Sides[j].Plane.P2.Z;
+
+					center.x += solid.Sides[j].Plane.P3.X;
+					center.y += solid.Sides[j].Plane.P3.Y;
+					center.z += solid.Sides[j].Plane.P3.Z;
+				}
+				center /= (float)(solid.Sides.Count * 3);
+
+				var unfixedOrigin = center;
+				center = Swizzle(center) * inchesInMeters;
+
+				bool enabled = true;
+				// compute all the sides of the brush that will be clipped.
+				for (int j = solid.Sides.Count; j-- > 0;)
+				{
                     VmfSolidSide side = solid.Sides[j];
 
                     // detect excluded polygons.
@@ -145,62 +250,64 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     }
 
                     // calculate the clipping planes.
-                    Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                    planes[j] = new float4(clip.normal, clip.distance);
-                    planeSurfaces[j] = surface;
+                    Plane clip = VmfPointsToUnityPlane(side.Plane);
+                    /*
+					var normal = clip.normal;
+					clip.distance += (normal.x * center.x) +
+									 (normal.y * center.y) +
+									 (normal.z * center.z);
+                    */
+					planes[j] = new float4(clip.normal, clip.distance);
+					planeSurfaces[j] = surface;
 
                     // check whether this surface is a displacement.
                     if (side.Displacement != null)
-                    {
-                        // disable the brush.
-                        go.gameObject.GetComponent<ChiselBrush>().enabled = false;
+					{
+						surface.brushMaterial.LayerUsage = LayerUsageFlags.None;
 
-                        // keep track of the surface used to cut the mesh.
-                        DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface });
-                    }
+						// keep track of the surface used to cut the mesh.
+						DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface, descriptionIndex = j });
+						enabled = false; 
+					}
                 }
+
+
+				// build a very large cube brush.
+				ChiselBrushComponent go = ChiselComponentFactory.Create<ChiselBrushComponent>($"Solid {solid.Id}", model);
+				// TODO: should output all sides that are not displaced, but visible
+				if (!enabled) go.enabled = false;
+				go.surfaceDefinition = new ChiselSurfaceDefinition();
+                go.surfaceDefinition.EnsureSize(planes.Length);
 
                 // cut all the clipping planes out of the brush in one go.
-                brushMesh.Cut(planes, planeSurfaces);
-
-                // now iterate over the planes to calculate UV coordinates.
-                int[] indices = new int[solid.Sides.Count];
-                for (int k = 0; k < planes.Length; k++)
+                BrushMesh brushMesh;
+				BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceDefinition, out brushMesh);
+                go.definition.BrushOutline = brushMesh;
+				var surfaceDefinitions = go.surfaceDefinition;
+				for (int j = 0; j < brushMesh.polygons.Length; j++)
                 {
-                    var plane = planes[k];
-                    int closestIndex = 0;
-                    float closestDistance = math.lengthsq(plane - brushMesh.planes[0]);
-                    for (int j = 1; j < brushMesh.planes.Length; j++)
-                    {
-                        float testDistance = math.lengthsq(plane - brushMesh.planes[j]);
-                        if (testDistance < closestDistance)
-                        {
-                            closestIndex = j;
-                            closestDistance = testDistance;
-                        }
-                    }
-                    indices[k] = closestIndex;
-                }
+                    surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
+				}
 
-                for (int j = 0; j < indices.Length; j++)
-                    brushMesh.planes[indices[j]] = planes[j];
-
-                for (int j = solid.Sides.Count; j-- > 0;)
+				int mainTex = Shader.PropertyToID("_MainTex");
+				for (int j = solid.Sides.Count; j-- > 0;)
                 {
                     VmfSolidSide side = solid.Sides[j];
-                    var surface = brushMesh.polygons[indices[j]].surface;
-                    var material = surface.brushMaterial.RenderMaterial;
+                    var surface = planeSurfaces[j];
+					var material = surface.brushMaterial.RenderMaterial;
 
                     // calculate the texture coordinates.
                     int w = 256;
                     int h = 256;
-                    if (material.mainTexture != null)
+                    if (material.HasProperty(mainTex) &&
+						material.mainTexture != null)
                     {
                         w = material.mainTexture.width;
                         h = material.mainTexture.height;
                     }
-                    var clip = new Plane(planes[j].xyz, planes[j].w);
-                    CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+
+					var clip = new Plane(planes[j].xyz, planes[j].w);
+                    CalculateTextureCoordinates(go, unfixedOrigin, surface, clip, w, h, side.UAxis, side.VAxis);
                 }
 
                 // build displacements.
@@ -209,38 +316,33 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     // find the brush mesh polygon:
                     for (int polyidx = 0; polyidx < brushMesh.polygons.Length; polyidx++)
                     {
-                        if (brushMesh.polygons[polyidx].surface == displacement.surface)
+                        if (brushMesh.polygons[polyidx].descriptionIndex != displacement.descriptionIndex)
+                            continue;
+						
+                        // find the polygon plane.
+                        Plane plane = new Plane(brushMesh.planes[polyidx].xyz, brushMesh.planes[polyidx].w);
+
+                        // find all vertices that belong to this polygon:
+                        List<Vector3> vertices = new List<Vector3>();
                         {
-                            // find the polygon plane.
-                            Plane plane = new Plane(brushMesh.planes[polyidx].xyz, brushMesh.planes[polyidx].w);
-
-                            // find all vertices that belong to this polygon:
-                            List<Vector3> vertices = new List<Vector3>();
+                            var polygon = brushMesh.polygons[polyidx];
+                            var firstEdge = polygon.firstEdge;
+                            var edgeCount = polygon.edgeCount;
+                            var lastEdge = firstEdge + edgeCount;
+                            for (int e = firstEdge; e < lastEdge; e++)
                             {
-                                var polygon = brushMesh.polygons[polyidx];
-                                var firstEdge = polygon.firstEdge;
-                                var edgeCount = polygon.edgeCount;
-                                var lastEdge = firstEdge + edgeCount;
-                                for (int e = firstEdge; e < lastEdge; e++)
-                                {
-                                    vertices.Add(brushMesh.vertices[brushMesh.halfEdges[e].vertexIndex]);
-                                }
+                                vertices.Add(brushMesh.vertices[brushMesh.halfEdges[e].vertexIndex]);
                             }
-                            // reverse the winding order.
-                            vertices.Reverse();
-
-                            var first = vertices[0];
-                            vertices.RemoveAt(0);
-                            vertices.Add(first);
-
-                            // build displacement:
-                            BuildDisplacementSurface(go, displacement.side, displacement.surface, vertices, plane);
                         }
+                        
+                        // build displacement:
+                        BuildDisplacementSurface(go, displacement.side, displacement.surface, vertices, plane);
+                        break;
                     }
                 }
-
+                
                 // finalize the brush by snapping planes and centering the pivot point.
-                go.transform.position += brushMesh.CenterAndSnapPlanes();
+                go.transform.position += brushMesh.CenterAndSnapPlanes(ref surfaceDefinitions);
                 foreach (Transform child in go.transform)
                     child.position -= go.transform.position;
             }
@@ -288,23 +390,34 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     // HACK: Chisel doesn't support collision brushes yet- skip them completely!
                     if (solid.Sides.Count > 0 && IsInvisibleMaterial(solid.Sides[0].Material))
                         continue;
-                    // HACK: Fix me in the future!
+					// HACK: Fix me in the future!
 
-                    // build a very large cube brush.
-                    ChiselBrush go = ChiselComponentFactory.Create<ChiselBrush>(model);
-                    go.definition.surfaceDefinition = new ChiselSurfaceDefinition();
-                    go.definition.surfaceDefinition.EnsureSize(6);
-                    BrushMesh brushMesh = new BrushMesh();
-                    go.definition.brushOutline = brushMesh;
-                    BrushMeshFactory.CreateBox(ref brushMesh, new Vector3(-4096, -4096, -4096), new Vector3(4096, 4096, 4096), in go.definition.surfaceDefinition);
+					var center = Vector3.zero;
+					for (int j = 0; j < solid.Sides.Count; j++)
+					{
+						center.x += solid.Sides[j].Plane.P1.X;
+						center.y += solid.Sides[j].Plane.P1.Y;
+						center.z += solid.Sides[j].Plane.P1.Z;
 
-                    // prepare for uv calculations of clip planes after cutting.
-                    var planes = new float4[solid.Sides.Count];
-                    var planeSurfaces = new ChiselSurface[solid.Sides.Count];
+						center.x += solid.Sides[j].Plane.P2.X;
+						center.y += solid.Sides[j].Plane.P2.Y;
+						center.z += solid.Sides[j].Plane.P2.Z;
 
-                    // clip all the sides out of the brush.
-                    for (int j = solid.Sides.Count; j-- > 0;)
-                    {
+						center.x += solid.Sides[j].Plane.P3.X;
+						center.y += solid.Sides[j].Plane.P3.Y;
+						center.z += solid.Sides[j].Plane.P3.Z;
+					}
+					center /= (float)(solid.Sides.Count * 3);
+
+					var unfixedOrigin = center;
+					center = Swizzle(center) * inchesInMeters;
+
+					// prepare for uv calculations of clip planes after cutting.
+					var planes = new float4[solid.Sides.Count];
+					var planeSurfaces = new ChiselSurface[solid.Sides.Count];
+					// clip all the sides out of the brush.
+					for (int j = solid.Sides.Count; j-- > 0;)
+					{
                         VmfSolidSide side = solid.Sides[j];
 
                         // detect excluded polygons.
@@ -358,57 +471,55 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
                         }
 
-                        // calculate the clipping planes.
-                        Plane clip = new Plane(go.transform.InverseTransformPoint(new Vector3(side.Plane.P1.X, side.Plane.P1.Z, side.Plane.P1.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P2.X, side.Plane.P2.Z, side.Plane.P2.Y) * inchesInMeters), go.transform.InverseTransformPoint(new Vector3(side.Plane.P3.X, side.Plane.P3.Z, side.Plane.P3.Y) * inchesInMeters));
-                        planes[j] = new float4(clip.normal, clip.distance);
-                        planeSurfaces[j] = surface;
-                    }
+						// calculate the clipping planes.
+						Plane clip = VmfPointsToUnityPlane(side.Plane);
+                        /*
+						var normal = clip.normal;
+						clip.distance += (normal.x * center.x) +
+										 (normal.y * center.y) +
+										 (normal.z * center.z);
+                        */
+						planes[j] = new float4(clip.normal, clip.distance);
+						planeSurfaces[j] = surface;
+					}
 
-                    // cut all the clipping planes out of the brush in one go.
-                    brushMesh.Cut(planes, planeSurfaces);
+					ChiselBrushComponent go = ChiselComponentFactory.Create<ChiselBrushComponent>($"Solid {solid.Id}", model);
+					go.surfaceDefinition = new ChiselSurfaceDefinition();
+					go.surfaceDefinition.EnsureSize(planes.Length);
 
-                    // now iterate over the planes to calculate UV coordinates.
-                    int[] indices = new int[solid.Sides.Count];
-                    for (int k = 0; k < planes.Length; k++)
-                    {
-                        var plane = planes[k];
-                        int closestIndex = 0;
-                        float closestDistance = math.lengthsq(plane - brushMesh.planes[0]);
-                        for (int j = 1; j < brushMesh.planes.Length; j++)
-                        {
-                            float testDistance = math.lengthsq(plane - brushMesh.planes[j]);
-                            if (testDistance < closestDistance)
-                            {
-                                closestIndex = j;
-                                closestDistance = testDistance;
-                            }
-                        }
-                        indices[k] = closestIndex;
-                    }
+					// cut all the clipping planes out of the brush in one go.
+					BrushMesh brushMesh;
+					BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceDefinition, out brushMesh);
+                    go.definition.BrushOutline = brushMesh;
+					var surfaceDefinitions = go.surfaceDefinition;
 
-                    for (int j = 0; j < indices.Length; j++)
-                        brushMesh.planes[indices[j]] = planes[j];
+					for (int j = 0; j < brushMesh.polygons.Length; j++)
+					{
+						surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
+					}
 
-                    for (int j = solid.Sides.Count; j-- > 0;)
+					int mainTex = Shader.PropertyToID("_MainTex");
+					for (int j = solid.Sides.Count; j-- > 0;)
                     {
                         VmfSolidSide side = solid.Sides[j];
-                        var surface = brushMesh.polygons[indices[j]].surface;
-                        var material = surface.brushMaterial.RenderMaterial;
+						var surface = planeSurfaces[j];
+						var material = surface.brushMaterial.RenderMaterial;
 
                         // calculate the texture coordinates.
                         int w = 256;
                         int h = 256;
-                        if (material.mainTexture != null)
+						if (material.HasProperty(mainTex) &&
+					        material.mainTexture != null)
                         {
                             w = material.mainTexture.width;
                             h = material.mainTexture.height;
                         }
-                        var clip = new Plane(planes[j].xyz, planes[j].w);
-                        CalculateTextureCoordinates(go, surface, clip, w, h, side.UAxis, side.VAxis);
+						var clip = new Plane(planes[j].xyz, planes[j].w);
+                        CalculateTextureCoordinates(go, center, surface, clip, w, h, side.UAxis, side.VAxis);
                     }
 
                     // finalize the brush by snapping planes and centering the pivot point.
-                    go.transform.position += brushMesh.CenterAndSnapPlanes();
+                    go.transform.position += brushMesh.CenterAndSnapPlanes(ref surfaceDefinitions);
 
                     // detail brushes that do not affect the CSG world.
                     //if (entity.ClassName == "func_detail")
@@ -420,35 +531,46 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             }
         }
 
-        private static void CalculateTextureCoordinates(ChiselBrush pr, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
-        {
-            var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(clip.normal, clip.distance));
-            var planeSpaceToLocal = (Matrix4x4)math.inverse(localToPlaneSpace);
+        private static void CalculateTextureCoordinates(ChiselBrushComponent pr, Vector3 unfixedOrigin, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
+		{
+			var localToPlaneSpace = MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(clip.normal, clip.distance));
+			var planeSpaceToLocal = math.inverse(localToPlaneSpace);
 
-            UAxis.Translation %= textureWidth;
-            VAxis.Translation %= textureHeight;
+			var uscale =  1.0f / textureWidth;
+			var vscale = -1.0f / textureHeight;
 
-            if (UAxis.Translation < -textureWidth / 2f)
-                UAxis.Translation += textureWidth;
+            var uVector = new float3(UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z);
+			var vVector = new float3(VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z);
 
-            if (VAxis.Translation < -textureHeight / 2f)
-                VAxis.Translation += textureHeight;
+			uVector /= UAxis.Scale;
+			vVector /= VAxis.Scale;
 
-            var scaleX = textureWidth * UAxis.Scale * inchesInMeters;
-            var scaleY = textureHeight * VAxis.Scale * inchesInMeters;
+            var uoffset = UAxis.Translation;
+            var voffset = VAxis.Translation;
 
-            var uoffset = Vector3.Dot(Vector3.zero, new Vector3(UAxis.Vector.X, UAxis.Vector.Z, UAxis.Vector.Y)) + (UAxis.Translation / textureWidth);
-            var voffset = Vector3.Dot(Vector3.zero, new Vector3(VAxis.Vector.X, VAxis.Vector.Z, VAxis.Vector.Y)) + (VAxis.Translation / textureHeight);
+			uVector = new float3(UAxis.Vector.X, UAxis.Vector.Y, UAxis.Vector.Z);
+			vVector = new float3(VAxis.Vector.X, VAxis.Vector.Y, VAxis.Vector.Z);
 
-            var uVector = new Vector4(UAxis.Vector.X / scaleX, UAxis.Vector.Z / scaleX, UAxis.Vector.Y / scaleX, uoffset);
-            var vVector = new Vector4(VAxis.Vector.X / scaleY, VAxis.Vector.Z / scaleY, VAxis.Vector.Y / scaleY, voffset);
-            var uvMatrix = new UVMatrix(uVector, -vVector);
-            var matrix = uvMatrix.ToMatrix();
+			uVector = Swizzle(uVector);
+			vVector = Swizzle(vVector);
 
-            matrix = matrix * planeSpaceToLocal;
+			uVector /= UAxis.Scale;
+			vVector /= VAxis.Scale;
 
-            surface.surfaceDescription.UV0 = new UVMatrix(matrix);
-        }
+			uVector /= inchesInMeters;
+			vVector /= inchesInMeters;
+			var umatrix = new double4(uVector, uoffset) * uscale;
+			var vmatrix = new double4(vVector, voffset) * vscale;
+		
+
+			var matTex = Matrix4x4.identity;
+			matTex.SetRow(0, (float4)umatrix);
+			matTex.SetRow(1, (float4)vmatrix);
+			matTex.SetRow(2, float4.zero);
+
+			var uvMatrix = new UVMatrix(math.mul(matTex, planeSpaceToLocal));
+			surface.surfaceDescription.UV0 = uvMatrix;
+		}
 
         /// <summary>
         /// Determines whether the specified name is an excluded material.
@@ -520,121 +642,107 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             return false;
         }
 
-        private static void BuildDisplacementSurface(ChiselBrush go, VmfSolidSide side, ChiselSurface surface, List<Vector3> vertices, Plane plane)
+		private static void BuildDisplacementSurface(ChiselBrushComponent go, VmfSolidSide side, ChiselSurface surface, List<Vector3> vertices, Plane plane)
         {
             // create a new game object for the displacement.
             GameObject dgo = new GameObject("Displacement");
             dgo.transform.parent = go.transform;
             MeshRenderer meshRenderer = dgo.AddComponent<MeshRenderer>();
-            MeshFilter meshFilter = dgo.AddComponent<MeshFilter>();
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.TwoSided;
+			MeshFilter meshFilter = dgo.AddComponent<MeshFilter>();
             MeshCollider meshCollider = dgo.AddComponent<MeshCollider>();
 
-            // create a mesh.
-            Mesh mesh = new Mesh();
+			// create a mesh.
+			Mesh mesh = new Mesh();
             mesh.name = "Displacement";
 
-            List<Vector3> meshVertices = new List<Vector3>();
-            List<Vector2> meshUVs = new List<Vector2>();
-            List<int> meshTriangles = new List<int>();
+			var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(plane.normal, plane.distance));
+			var uvmatrix = surface.surfaceDescription.UV0.ToMatrix4x4();
+			uvmatrix *= localToPlaneSpace;
 
-            int power5 = 5;
-            int power4 = 4;
+            var vmfStartPosition = Swizzle(side.Displacement.StartPosition) * inchesInMeters;
 
-            if (side.Displacement.Power == 2)
+			int[] vertex_winding_indices = new int[4];
+			vertex_winding_indices[0] = 0;
+			vertex_winding_indices[1] = 1;
+			vertex_winding_indices[2] = 2;
+			vertex_winding_indices[3] = 3;
+
+			for (int ff = 0; ff < vertices.Count; ff++)
+			{
+				float diff1 = math.abs(vertices[ff].x - vmfStartPosition.x);
+				float diff2 = math.abs(vertices[ff].y - vmfStartPosition.y);
+				float diff3 = math.abs(vertices[ff].z - vmfStartPosition.z);
+
+				if ((diff1 < 0.001f) && (diff2 < 0.001f) && (diff3 < 0.001f))
+				{
+					vertex_winding_indices[0] = (ff    );
+					vertex_winding_indices[1] = (ff + 1) % 4;
+					vertex_winding_indices[2] = (ff + 2) % 4;
+					vertex_winding_indices[3] = (ff + 3) % 4;
+					break;
+				}
+			}
+
+			int power = (int)math.pow(2, (int)side.Displacement.Power) + 1;
+			float step = 1.0f / (power - 1);
+
+            var vertex0 = vertices[vertex_winding_indices[0]];
+			var vertex1 = vertices[vertex_winding_indices[1]];
+			var vertex2 = vertices[vertex_winding_indices[2]];
+			var vertex3 = vertices[vertex_winding_indices[3]];
+
+			var eastAxis  = (vertex2 - vertex3) * step;
+			var westAxis  = (vertex1 - vertex0) * step;
+
+			var meshVertices = new Vector3[power * power];
+			var meshUVs = new Vector2[power * power];
+
+			var faceNormal = -plane.normal;
+			for (int v = 0, x = 0; x < power ; x++)
+			{
+				var normals = side.Displacement.Normals[x];
+				var offsets = side.Displacement.Offsets[x];
+				var distances = side.Displacement.Distances[x];
+
+				var eastVector = vertex3 + (eastAxis * x);
+				var westVector = vertex0 + (westAxis * x);
+
+				var axis = (eastVector - westVector) * step;
+				for (int z = 0; z < power; z++, v++)
+				{
+					var vertex = (axis * (float)z) + westVector;
+					var result = (faceNormal * side.Displacement.Elevation);
+					var normal = Swizzle(normals[z]);
+					var offset = Swizzle(offsets[z]);
+					var distance = distances[z];
+					meshVertices[v] = vertex + ((result + (normal * distance)) * inchesInMeters) + (offset * inchesInMeters);
+					meshUVs[v] = uvmatrix.MultiplyPoint(vertex);
+				}
+			}
+
+			int quadCount = ( power - 1 ) * ( power - 1);
+            var meshTriangles = new int[quadCount * 6];
+            for (int polystart = 0, t = 0, x = 0; x < (power-1); x++, polystart++)
             {
-                power5 = 5;
-                power4 = 4;
-            }
-            if (side.Displacement.Power == 3)
-            {
-                power5 = 9;
-                power4 = 8;
-            }
-            if (side.Displacement.Power == 4)
-            {
-                power5 = 17;
-                power4 = 16;
-            }
-
-            // rotate vertices until we have the start position in the bottom left corner.
-            VmfVector3 vmfStartPosition = side.Displacement.StartPosition;
-            Vector3 startPosition = new Vector3(vmfStartPosition.X, vmfStartPosition.Z, vmfStartPosition.Y) * inchesInMeters;
-
-            for (int i = 0; i < 4; i++)
-            {
-                var first = vertices[0];
-                if (Vector3.Distance(first, startPosition) < 0.01f)
-                    break;
-                vertices.RemoveAt(0);
-                vertices.Add(first);
-            }
-
-            var first2 = vertices[0];
-            vertices.RemoveAt(0);
-            vertices.Add(first2);
-
-            // create all of the vertices:
-            for (int z = 0; z < power5; z++)
-            {
-                for (int x = 0; x < power5; x++)
+                for (int z = 0; z < (power-1); z++, polystart++, t += 6)
                 {
-                    // calculate vertex position (grid formation):
-                    Vector3 a = Vector3.Lerp(vertices[2], vertices[3], (1.0f / power4) * z);
-                    Vector3 cross = Vector3.Lerp(vertices[1], vertices[0], (1.0f / power4) * z);
-                    Vector3 b = Vector3.Lerp(a, cross, (1.0f / power4) * x);
+                    var quadIndex0 = polystart;
+                    var quadIndex1 = polystart + 1;
+                    var quadIndex2 = polystart + power + 1;
+                    var quadIndex3 = polystart + power;
 
-                    // calculate UVs:
-                    var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(plane.normal, plane.distance));
-                    var uvmatrix = surface.surfaceDescription.UV0.ToMatrix();
-                    uvmatrix *= localToPlaneSpace;
-                    meshUVs.Add(uvmatrix.MultiplyPoint(b));
+                    meshTriangles[t + 0] = quadIndex0;
+                    meshTriangles[t + 1] = quadIndex2;
+                    meshTriangles[t + 2] = quadIndex1;
 
-                    // calculate offsets:
-                    VmfVector3 vmfOffset = side.Displacement.Offsets[power4 - z][x];
-                    Vector3 offset = new Vector3(vmfOffset.X * inchesInMeters, vmfOffset.Z * inchesInMeters, vmfOffset.Y * inchesInMeters);
-                    b += offset;
-
-                    // calculate normal to move the vertex along (displacement):
-                    VmfVector3 vmfNormal = side.Displacement.Normals[power4 - z][x];
-                    Vector3 normal = new Vector3(vmfNormal.X, vmfNormal.Z, vmfNormal.Y);
-
-                    //normal = Vector3.Project(normal, plane.normal);
-                    b += plane.normal * side.Displacement.Elevation * inchesInMeters;
-                    b += normal * side.Displacement.Distances[power4 - z][x] * inchesInMeters;
-
-                    meshVertices.Add(b);
-                }
+                    meshTriangles[t + 3] = quadIndex0;
+                    meshTriangles[t + 4] = quadIndex3;
+                    meshTriangles[t + 5] = quadIndex2;
+				}
             }
 
-            // create the triangles in the same chessboard style as hammer:
-            int tri = 0;
-            for (int x = 0; x < (power4 * power4); x++)
-            {
-                tri = x + (x / power4);
-
-                if (tri % 2 == 0)
-                {
-                    meshTriangles.Add(0 + tri);
-                    meshTriangles.Add(power5 + 1 + tri);
-                    meshTriangles.Add(power5 + tri);
-
-                    meshTriangles.Add(0 + tri);
-                    meshTriangles.Add(1 + tri);
-                    meshTriangles.Add(power5 + 1 + tri);
-                }
-                else
-                {
-                    meshTriangles.Add(0 + tri);
-                    meshTriangles.Add(1 + tri);
-                    meshTriangles.Add(power5 + tri);
-
-                    meshTriangles.Add(1 + tri);
-                    meshTriangles.Add(power5 + 1 + tri);
-                    meshTriangles.Add(power5 + tri);
-                }
-            }
-
-            mesh.SetVertices(meshVertices);
+			mesh.SetVertices(meshVertices);
             mesh.SetUVs(0, meshUVs);
             mesh.SetTriangles(meshTriangles, 0);
 
@@ -642,7 +750,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             {
                 mesh.RecalculateBounds();
                 Vector3 meshCenter = mesh.bounds.center;
-                for (int i = 0; i < meshVertices.Count; i++)
+                for (int i = 0; i < meshVertices.Length; i++)
                 {
                     meshVertices[i] -= meshCenter;
                 }
