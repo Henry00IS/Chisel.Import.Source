@@ -229,25 +229,26 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     // fallback to default material.
                     if (material == null)
                     {
-                        material = ChiselMaterialManager.DefaultFloorMaterial;
-                    }
+                        material = ChiselDefaultMaterials.DefaultFloorMaterial;
+					}
 
-                    // create chisel surface for the clip.
-                    ChiselSurface surface = new ChiselSurface();
-                    surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, ChiselMaterialManager.DefaultPhysicsMaterial);
-                    surface.surfaceDescription = SurfaceDescription.Default;
 
-                    // detect collision-only polygons.
-                    if (IsInvisibleMaterial(side.Material))
-                    {
-                        surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.RenderReceiveCastShadows;
-                    }
-                    // detect excluded polygons.
-                    if (IsExcludedMaterial(side.Material))
-                    {
-                        surface.brushMaterial.LayerUsage &= LayerUsageFlags.CastShadows;
-                        surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
-                    }
+					// detect collision-only polygons.
+					if (IsInvisibleMaterial(side.Material))
+					{
+                        material = ChiselDefaultMaterials.CollisionOnlyMaterial;
+						//surface.DestinationFlags &= ~SurfaceDestinationFlags.RenderReceiveCastShadows;
+					}
+					// detect excluded polygons.
+					if (IsExcludedMaterial(side.Material))
+					{
+						material = ChiselDefaultMaterials.DiscardedMaterial;
+						//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
+						//surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
+					}
+
+					// create chisel surface for the clip.
+					ChiselSurface surface = ChiselSurface.Create(material);
 
                     // calculate the clipping planes.
                     Plane clip = VmfPointsToUnityPlane(side.Plane);
@@ -258,32 +259,34 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 									 (normal.z * center.z);
                     */
 					planes[j] = new float4(clip.normal, clip.distance);
-					planeSurfaces[j] = surface;
 
                     // check whether this surface is a displacement.
                     if (side.Displacement != null)
 					{
-						surface.brushMaterial.LayerUsage = LayerUsageFlags.None;
+						//surface.DestinationFlags = SurfaceDestinationFlags.None;
 
 						// keep track of the surface used to cut the mesh.
 						DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface, descriptionIndex = j });
-						enabled = false; 
+						enabled = false;
+
+						surface = ChiselSurface.Create(ChiselDefaultMaterials.DiscardedMaterial);
 					}
-                }
+					planeSurfaces[j] = surface;
+				}
 
 
 				// build a very large cube brush.
 				ChiselBrushComponent go = ChiselComponentFactory.Create<ChiselBrushComponent>($"Solid {solid.Id}", model);
 				// TODO: should output all sides that are not displaced, but visible
 				if (!enabled) go.enabled = false;
-				go.surfaceDefinition = new ChiselSurfaceDefinition();
-                go.surfaceDefinition.EnsureSize(planes.Length);
+				go.surfaceArray = new ChiselSurfaceArray();
+                go.surfaceArray.EnsureSize(planes.Length);
 
                 // cut all the clipping planes out of the brush in one go.
                 BrushMesh brushMesh;
-				BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceDefinition, out brushMesh);
+				BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceArray, out brushMesh);
                 go.definition.BrushOutline = brushMesh;
-				var surfaceDefinitions = go.surfaceDefinition;
+				var surfaceDefinitions = go.surfaceArray;
 				for (int j = 0; j < brushMesh.polygons.Length; j++)
                 {
                     surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
@@ -294,12 +297,13 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 {
                     VmfSolidSide side = solid.Sides[j];
                     var surface = planeSurfaces[j];
-					var material = surface.brushMaterial.RenderMaterial;
+					var material = surface.RenderMaterial;
 
                     // calculate the texture coordinates.
                     int w = 256;
                     int h = 256;
-                    if (material.HasProperty(mainTex) &&
+					if (material != null &&
+						material.HasProperty(mainTex) &&
 						material.mainTexture != null)
                     {
                         w = material.mainTexture.width;
@@ -451,24 +455,24 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         // fallback to default material.
                         if (material == null)
                         {
-                            material = ChiselMaterialManager.DefaultFloorMaterial;
+                            material = ChiselDefaultMaterials.DefaultFloorMaterial;
                         }
 
-                        // create chisel surface for the clip.
-                        ChiselSurface surface = new ChiselSurface();
-                        surface.brushMaterial = ChiselBrushMaterial.CreateInstance(material, ChiselMaterialManager.DefaultPhysicsMaterial);
-                        surface.surfaceDescription = SurfaceDescription.Default;
+						// create chisel surface for the clip.
+						ChiselSurface surface = ChiselSurface.Create(material);
 
-                        // detect collision-only polygons.
-                        if (IsInvisibleMaterial(side.Material))
-                        {
-                            surface.brushMaterial.LayerUsage &= ~LayerUsageFlags.RenderReceiveCastShadows;
+						// detect collision-only polygons.
+						if (IsInvisibleMaterial(side.Material))
+						{
+							material = ChiselDefaultMaterials.CollisionOnlyMaterial;
+							//surface.DestinationFlags &= ~SurfaceDestinationFlags.RenderReceiveCastShadows;
                         }
                         // detect excluded polygons.
                         if (IsExcludedMaterial(side.Material))
-                        {
-                            surface.brushMaterial.LayerUsage &= LayerUsageFlags.CastShadows;
-                            surface.brushMaterial.LayerUsage |= LayerUsageFlags.Collidable;
+						{
+							material = ChiselDefaultMaterials.DiscardedMaterial;
+							//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
+                            //surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
                         }
 
 						// calculate the clipping planes.
@@ -484,14 +488,14 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 					}
 
 					ChiselBrushComponent go = ChiselComponentFactory.Create<ChiselBrushComponent>($"Solid {solid.Id}", model);
-					go.surfaceDefinition = new ChiselSurfaceDefinition();
-					go.surfaceDefinition.EnsureSize(planes.Length);
+					go.surfaceArray = new ChiselSurfaceArray();
+					go.surfaceArray.EnsureSize(planes.Length);
 
 					// cut all the clipping planes out of the brush in one go.
 					BrushMesh brushMesh;
-					BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceDefinition, out brushMesh);
+					BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceArray, out brushMesh);
                     go.definition.BrushOutline = brushMesh;
-					var surfaceDefinitions = go.surfaceDefinition;
+					var surfaceDefinitions = go.surfaceArray;
 
 					for (int j = 0; j < brushMesh.polygons.Length; j++)
 					{
@@ -503,12 +507,13 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     {
                         VmfSolidSide side = solid.Sides[j];
 						var surface = planeSurfaces[j];
-						var material = surface.brushMaterial.RenderMaterial;
+						var material = surface.RenderMaterial;
 
                         // calculate the texture coordinates.
                         int w = 256;
                         int h = 256;
-						if (material.HasProperty(mainTex) &&
+						if (material != null &&
+						    material.HasProperty(mainTex) &&
 					        material.mainTexture != null)
                         {
                             w = material.mainTexture.width;
@@ -569,7 +574,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 			matTex.SetRow(2, float4.zero);
 
 			var uvMatrix = new UVMatrix(math.mul(matTex, planeSpaceToLocal));
-			surface.surfaceDescription.UV0 = uvMatrix;
+			surface.surfaceDetails.UV0 = uvMatrix;
 		}
 
         /// <summary>
@@ -657,7 +662,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             mesh.name = "Displacement";
 
 			var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(plane.normal, plane.distance));
-			var uvmatrix = surface.surfaceDescription.UV0.ToMatrix4x4();
+			var uvmatrix = surface.surfaceDetails.UV0.ToMatrix4x4();
 			uvmatrix *= localToPlaneSpace;
 
             var vmfStartPosition = Swizzle(side.Displacement.StartPosition) * inchesInMeters;
@@ -764,7 +769,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
             meshFilter.sharedMesh = mesh;
             meshCollider.sharedMesh = mesh;
-            meshRenderer.sharedMaterial = surface.brushMaterial.RenderMaterial;
+            meshRenderer.sharedMaterial = surface.RenderMaterial;
         }
     }
 }
