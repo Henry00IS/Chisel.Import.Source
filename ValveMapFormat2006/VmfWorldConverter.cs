@@ -1,4 +1,4 @@
-﻿///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // MIT License
 //
 // Copyright(c) 2018-2020 Henry de Jongh
@@ -242,7 +242,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 					// detect excluded polygons.
 					if (IsExcludedMaterial(side.Material))
 					{
-						material = ChiselDefaultMaterials.DiscardedMaterial;
+						material = ChiselDefaultMaterials.ShadowOnlyMaterial;
 						//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
 						//surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
 					}
@@ -269,7 +269,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 						DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface, descriptionIndex = j });
 						enabled = false;
 
-						surface = ChiselSurface.Create(ChiselDefaultMaterials.DiscardedMaterial);
+						//surface = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
 					}
 					planeSurfaces[j] = surface;
 				}
@@ -324,10 +324,10 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             continue;
 						
                         // find the polygon plane.
-                        Plane plane = new Plane(brushMesh.planes[polyidx].xyz, brushMesh.planes[polyidx].w);
+                        Plane plane = new(brushMesh.planes[polyidx].xyz, brushMesh.planes[polyidx].w);
 
                         // find all vertices that belong to this polygon:
-                        List<Vector3> vertices = new List<Vector3>();
+                        List<Vector3> vertices = new();
                         {
                             var polygon = brushMesh.polygons[polyidx];
                             var firstEdge = polygon.firstEdge;
@@ -341,12 +341,19 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         
                         // build displacement:
                         BuildDisplacementSurface(go, displacement.side, displacement.surface, vertices, plane);
-                        break;
+						surfaceDefinitions.surfaces[displacement.descriptionIndex] = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
+
+						break;
                     }
                 }
-                
-                // finalize the brush by snapping planes and centering the pivot point.
-                go.transform.position += brushMesh.CenterAndSnapPlanes(ref surfaceDefinitions);
+
+				for (int j = 0; j < brushMesh.polygons.Length; j++)
+				{
+					surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
+				}
+
+				// finalize the brush by snapping planes and centering the pivot point.
+				go.transform.position += brushMesh.CenterAndSnapPlanes(ref surfaceDefinitions);
                 foreach (Transform child in go.transform)
                     child.position -= go.transform.position;
             }
@@ -470,7 +477,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         // detect excluded polygons.
                         if (IsExcludedMaterial(side.Material))
 						{
-							material = ChiselDefaultMaterials.DiscardedMaterial;
+							material = ChiselDefaultMaterials.ShadowOnlyMaterial;
 							//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
                             //surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
                         }
@@ -530,9 +537,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     //if (entity.ClassName == "func_detail")
                     //pr.IsNoCSG = true;
                     // collision only brushes.
-                    //if (entity.ClassName == "func_vehicleclip")
-                    //pr.IsVisible = false;
-                }
+					//if (entity.ClassName == "func_vehicleclip")
+					//pr.IsVisible = false;
+				}
             }
         }
 
@@ -658,8 +665,10 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             MeshCollider meshCollider = dgo.AddComponent<MeshCollider>();
 
 			// create a mesh.
-			Mesh mesh = new Mesh();
-            mesh.name = "Displacement";
+			Mesh mesh = new()
+			{
+				name = "Displacement"
+			};
 
 			var localToPlaneSpace = (Matrix4x4)MathExtensions.GenerateLocalToPlaneSpaceMatrix(new float4(plane.normal, plane.distance));
 			var uvmatrix = surface.surfaceDetails.UV0.ToMatrix4x4();
