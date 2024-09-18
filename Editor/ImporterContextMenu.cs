@@ -1,4 +1,4 @@
-﻿///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // MIT License
 //
 // Copyright(c) 2018-2020 Henry de Jongh
@@ -25,6 +25,8 @@
 #if UNITY_EDITOR
 
 using Chisel.Components;
+using Chisel.Import.Source.VPKTools;
+
 using System;
 using System.IO;
 using UnityEditor;
@@ -34,10 +36,23 @@ namespace AeternumGames.Chisel.Import.Source.Editor
 {
     public class ImporterContextMenu
     {
-        [MenuItem("GameObject/Chisel/Import/Valve Map Format 2006...")]
+        static GameResources gameResources;
+
+		[MenuItem("GameObject/Chisel/Import/Valve Map Format 2006...")]
         private static void ImportValveMapFormat2006()
-        {
-            GameObject go = null;
+		{
+            // TODO: have some way to set this
+    	    SourceGameTitle gameTitle = SourceGameTitle.BlackMesa;
+
+            if (gameResources == null)
+			{
+				var inputPaths = SourceGame.GetVPKPathsForTitle(gameTitle);
+
+				gameResources = new();
+				gameResources.InitializePaths(inputPaths);
+			}
+
+	    	GameObject go = null;
             try
             {
                 string path = EditorUtility.OpenFilePanel("Import Source Engine Map", "", "vmf");
@@ -51,9 +66,24 @@ namespace AeternumGames.Chisel.Import.Source.Editor
                     go = new GameObject("Source Map - " + Path.GetFileNameWithoutExtension(path));
                     go.SetActive(false);
 
-                    // create chisel model and import all of the brushes.
-                    EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Preparing Material Searcher...", 0.0f);
-                    ValveMapFormat2006.VmfWorldConverter.Import(ChiselModelManager.CreateNewModel(go.transform), map);
+                    Material skybox = null;
+                    if (!string.IsNullOrEmpty(map.SkyName))
+					{
+						skybox = MaterialImporter.ImportSkybox(gameResources, map.SkyName);
+					}
+
+                    if (skybox)
+                    {
+                        RenderSettings.skybox = skybox;
+                        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Skybox;
+                    } else
+                    {
+                        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+                    }
+
+					// create chisel model and import all of the brushes.
+					EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Preparing Material Searcher...", 0.0f);
+                    ValveMapFormat2006.VmfWorldConverter.Import(gameResources, ChiselModelManager.CreateNewModel(go.transform), map);
 
 #if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
                     // rebuild the world as we need the collision mesh for decals.

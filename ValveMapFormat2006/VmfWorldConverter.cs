@@ -28,6 +28,7 @@ using System;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
+using Chisel.Import.Source.VPKTools;
 
 namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 {
@@ -36,8 +37,6 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
     /// </summary>
     public static class VmfWorldConverter
 	{
-		public const float inchesInMeters = 0.03125f; // == 1.0f/16.0f as per source-sdk-2013 but halved to 1.0f/32.0f as it's too big for Unity.
-
 		private struct DisplacementSide
 		{
 			public VmfSolidSide side;
@@ -45,11 +44,15 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 			public int descriptionIndex;
 		}
 
-		public static Vector3 Swizzle(Vector3 input) { return new Vector3(-input.x, input.z, -input.y); }
-        public static Vector3 Swizzle(VmfVector3 input) { return new Vector3(-input.X, input.Z, -input.Y); }
-		public static Vector3 Unswizzle(Vector3 input) { return new Vector3(-input.x, -input.z, input.y); }
-		public static Vector3 Unswizzle(VmfVector3 input) { return new Vector3(-input.X, -input.Z, input.Y); }
-
+		public static Vector3 Swizzle(Vector3 input) 
+		{
+			return SourceEngineUnits.Swizzle(input);
+		}
+        public static Vector3 Swizzle(VmfVector3 input)
+		{
+			var inputV = new Vector3(input.X, input.Y, input.Z);
+			return SourceEngineUnits.Swizzle(inputV);
+		}
 
 		static decimal Sqrt(decimal x, decimal epsilon = 0.000000000000000001M)
 		{
@@ -117,19 +120,13 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 			var a = normalx;
 			var b = normaly;
 			var c = normalz;
-			var d = ((normalx * p1x) + (normaly * p1y) + (normalz * p1z)) * (Decimal)inchesInMeters;
+			var d = (float)(((normalx * p1x) + (normaly * p1y) + (normalz * p1z)) * (Decimal)SourceEngineUnits.VmfInvMeters);
 
-
-			UnityEngine.Plane plane = new UnityEngine.Plane();
-			plane.distance = (float)-d;
-			plane.normal = new Vector3((float)a, (float)b, (float)c);
-			/*/
-			UnityEngine.Plane plane;
-			plane = new UnityEngine.Plane(SourceEngineUnits.Swizzle(points[0]),
-										  SourceEngineUnits.Swizzle(points[1]),
-										  SourceEngineUnits.Swizzle(points[2]));
-			plane.distance /= VmfMeters;
-			//*/
+			UnityEngine.Plane plane = new()
+			{
+				distance = d * (SourceEngineUnits.InvertPlanes ? 1 : -1),
+				normal = new Vector3((float)a, (float)b, (float)c) * (SourceEngineUnits.InvertPlanes ? -1 : 1)
+			};
 			return plane;
 		}
 
@@ -138,7 +135,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// </summary>
         /// <param name="model">The model to import into.</param>
         /// <param name="world">The world to be imported.</param>
-        public static void Import(ChiselModelComponent model, VmfWorld world)
+        public static void Import(GameResources gameResources, ChiselModelComponent model, VmfWorld world)
         {
             // create a material searcher to associate materials automatically.
             MaterialSearcher materialSearcher = new MaterialSearcher();
@@ -151,257 +148,28 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 #if UNITY_EDITOR
                 UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map (1/3)", "Converting Hammer Solids To Chisel Brushes (" + (i + 1) + " / " + world.Solids.Count + ")...", i / (float)world.Solids.Count);
 #endif
-                VmfSolid solid = world.Solids[i];
-
-                // don't add triggers to the scene.
-                if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
-                    continue;
-
-                // HACK: Fix me in the future!
-                // HACK: Chisel doesn't support collision brushes yet- skip them completely!
-                if (solid.Sides.Count > 0 && IsInvisibleMaterial(solid.Sides[0].Material))
-                    continue;
-                // HACK: Fix me in the future!
-
-
-
-                // prepare for any displacements.
-                DisplacementSurfaces.Clear();
-
-                // prepare for uv calculations of clip planes after cutting.
-                var planes = new float4[solid.Sides.Count];
-                var planeSurfaces = new ChiselSurface[solid.Sides.Count];
-
-				var center = Vector3.zero;
-				for (int j = 0; j < solid.Sides.Count; j++)
+				try
 				{
-					center.x += solid.Sides[j].Plane.P1.X;
-					center.y += solid.Sides[j].Plane.P1.Y;
-					center.z += solid.Sides[j].Plane.P1.Z;
+					VmfSolid solid = world.Solids[i];
 
-					center.x += solid.Sides[j].Plane.P2.X;
-					center.y += solid.Sides[j].Plane.P2.Y;
-					center.z += solid.Sides[j].Plane.P2.Z;
+					// don't add triggers to the scene.
+					if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
+						continue;
 
-					center.x += solid.Sides[j].Plane.P3.X;
-					center.y += solid.Sides[j].Plane.P3.Y;
-					center.z += solid.Sides[j].Plane.P3.Z;
-				}
-				center /= (float)(solid.Sides.Count * 3);
-
-				var unfixedOrigin = center;
-				center = Swizzle(center) * inchesInMeters;
-
-				bool enabled = true;
-				// compute all the sides of the brush that will be clipped.
-				for (int j = solid.Sides.Count; j-- > 0;)
-				{
-                    VmfSolidSide side = solid.Sides[j];
-
-                    // detect excluded polygons.
-                    //if (IsExcludedMaterial(side.Material))
-                    //polygon.UserExcludeFromFinal = true;
-                    // detect collision-only brushes.
-                    //if (IsInvisibleMaterial(side.Material))
-                    //pr.IsVisible = false;
-
-                    // find the material in the unity project automatically.
-                    Material material;
-
-                    // try finding the fully qualified texture name with '/' replaced by '.' so 'BRICK.BRICKWALL052D'.
-                    string materialName = side.Material.Replace("/", ".");
-                    if (materialName.Contains("."))
-                    {
-                        // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
-                        string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
-                        material = materialSearcher.FindMaterial(new string[] { materialName, tiny });
-                        if (material == null && materialSearcherWarnings.Add(materialName))
-                            Debug.Log("Chisel: Tried to find material '" + materialName + "' and also as '" + tiny + "' but it couldn't be found in the project.");
-                    }
-                    else
-                    {
-                        // only try finding 'BRICKWALL052D'.
-                        material = materialSearcher.FindMaterial(new string[] { materialName });
-                        if (material == null && materialSearcherWarnings.Add(materialName))
-                            Debug.Log("Chisel: Tried to find material '" + materialName + "' but it couldn't be found in the project.");
-                    }
-
-                    // fallback to default material.
-                    if (material == null)
-                    {
-                        material = ChiselDefaultMaterials.DefaultFloorMaterial;
-					}
-
-
-					// detect collision-only polygons.
-					if (IsInvisibleMaterial(side.Material))
-					{
-                        material = ChiselDefaultMaterials.CollisionOnlyMaterial;
-						//surface.DestinationFlags &= ~SurfaceDestinationFlags.RenderReceiveCastShadows;
-					}
-					// detect excluded polygons.
-					if (IsExcludedMaterial(side.Material))
-					{
-						material = ChiselDefaultMaterials.ShadowOnlyMaterial;
-						//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
-						//surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
-					}
-
-					// create chisel surface for the clip.
-					ChiselSurface surface = ChiselSurface.Create(material);
-
-                    // calculate the clipping planes.
-                    Plane clip = VmfPointsToUnityPlane(side.Plane);
-                    /*
-					var normal = clip.normal;
-					clip.distance += (normal.x * center.x) +
-									 (normal.y * center.y) +
-									 (normal.z * center.z);
-                    */
-					planes[j] = new float4(clip.normal, clip.distance);
-
-                    // check whether this surface is a displacement.
-                    if (side.Displacement != null)
-					{
-						//surface.DestinationFlags = SurfaceDestinationFlags.None;
-
-						// keep track of the surface used to cut the mesh.
-						DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface, descriptionIndex = j });
-						enabled = false;
-
-						//surface = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
-					}
-					planeSurfaces[j] = surface;
-				}
-
-
-				// build a very large cube brush.
-				ChiselBrushComponent go = ChiselComponentFactory.Create<ChiselBrushComponent>($"Solid {solid.Id}", model);
-				// TODO: should output all sides that are not displaced, but visible
-				if (!enabled) go.enabled = false;
-				go.surfaceArray = new ChiselSurfaceArray();
-                go.surfaceArray.EnsureSize(planes.Length);
-
-                // cut all the clipping planes out of the brush in one go.
-                BrushMesh brushMesh;
-				BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceArray, out brushMesh);
-                go.definition.BrushOutline = brushMesh;
-				var surfaceDefinitions = go.surfaceArray;
-				for (int j = 0; j < brushMesh.polygons.Length; j++)
-                {
-                    surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
-				}
-
-				int mainTex = Shader.PropertyToID("_MainTex");
-				for (int j = solid.Sides.Count; j-- > 0;)
-                {
-                    VmfSolidSide side = solid.Sides[j];
-                    var surface = planeSurfaces[j];
-					var material = surface.RenderMaterial;
-
-                    // calculate the texture coordinates.
-                    int w = 256;
-                    int h = 256;
-					if (material != null &&
-						material.HasProperty(mainTex) &&
-						material.mainTexture != null)
-                    {
-                        w = material.mainTexture.width;
-                        h = material.mainTexture.height;
-                    }
-
-					var clip = new Plane(planes[j].xyz, planes[j].w);
-                    CalculateTextureCoordinates(go, unfixedOrigin, surface, clip, w, h, side.UAxis, side.VAxis);
-                }
-
-                // build displacements.
-                foreach (DisplacementSide displacement in DisplacementSurfaces)
-                {
-                    // find the brush mesh polygon:
-                    for (int polyidx = 0; polyidx < brushMesh.polygons.Length; polyidx++)
-                    {
-                        if (brushMesh.polygons[polyidx].descriptionIndex != displacement.descriptionIndex)
-                            continue;
-						
-                        // find the polygon plane.
-                        Plane plane = new(brushMesh.planes[polyidx].xyz, brushMesh.planes[polyidx].w);
-
-                        // find all vertices that belong to this polygon:
-                        List<Vector3> vertices = new();
-                        {
-                            var polygon = brushMesh.polygons[polyidx];
-                            var firstEdge = polygon.firstEdge;
-                            var edgeCount = polygon.edgeCount;
-                            var lastEdge = firstEdge + edgeCount;
-                            for (int e = firstEdge; e < lastEdge; e++)
-                            {
-                                vertices.Add(brushMesh.vertices[brushMesh.halfEdges[e].vertexIndex]);
-                            }
-                        }
-                        
-                        // build displacement:
-                        BuildDisplacementSurface(go, displacement.side, displacement.surface, vertices, plane);
-						surfaceDefinitions.surfaces[displacement.descriptionIndex] = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
-
-						break;
-                    }
-                }
-
-				for (int j = 0; j < brushMesh.polygons.Length; j++)
-				{
-					surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
-				}
-
-				// finalize the brush by snapping planes and centering the pivot point.
-				go.transform.position += brushMesh.CenterAndSnapPlanes(ref surfaceDefinitions);
-                foreach (Transform child in go.transform)
-                    child.position -= go.transform.position;
-            }
-
-            // iterate through all entities.
-            for (int e = 0; e < world.Entities.Count; e++)
-            {
-#if UNITY_EDITOR
-                UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map (2/3)", "Converting Hammer Entities To Chisel Brushes (" + (e + 1) + " / " + world.Entities.Count + ")...", e / (float)world.Entities.Count);
-#endif
-                VmfEntity entity = world.Entities[e];
-
-                // skip entities that chisel can't handle.
-                switch (entity.ClassName)
-                {
-                    case "func_areaportal":
-                    case "func_areaportalwindow":
-                    case "func_capturezone":
-                    case "func_changeclass":
-                    case "func_combine_ball_spawner":
-                    case "func_dustcloud":
-                    case "func_dustmotes":
-                    case "func_nobuild":
-                    case "func_nogrenades":
-                    case "func_occluder":
-                    case "func_precipitation":
-                    case "func_proprespawnzone":
-                    case "func_regenerate":
-                    case "func_respawnroom":
-                    case "func_smokevolume":
-                    case "func_viscluster":
-                        continue;
-                }
-
-                // iterate through all entity solids.
-                for (int i = 0; i < entity.Solids.Count; i++)
-                {
-                    VmfSolid solid = entity.Solids[i];
-
-                    // don't add triggers to the scene.
-                    if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
-                        continue;
-
-                    // HACK: Fix me in the future!
-                    // HACK: Chisel doesn't support collision brushes yet- skip them completely!
-                    if (solid.Sides.Count > 0 && IsInvisibleMaterial(solid.Sides[0].Material))
-                        continue;
 					// HACK: Fix me in the future!
+					// HACK: Chisel doesn't support collision brushes yet- skip them completely!
+					if (solid.Sides.Count > 0 && IsInvisibleMaterial(solid.Sides[0].Material))
+						continue;
+					// HACK: Fix me in the future!
+
+
+
+					// prepare for any displacements.
+					DisplacementSurfaces.Clear();
+
+					// prepare for uv calculations of clip planes after cutting.
+					var planes = new float4[solid.Sides.Count];
+					var planeSurfaces = new ChiselSurface[solid.Sides.Count];
 
 					var center = Vector3.zero;
 					for (int j = 0; j < solid.Sides.Count; j++)
@@ -421,92 +189,316 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 					center /= (float)(solid.Sides.Count * 3);
 
 					var unfixedOrigin = center;
-					center = Swizzle(center) * inchesInMeters;
+					center = Swizzle(center) * SourceEngineUnits.VmfInvMeters;
 
-					// prepare for uv calculations of clip planes after cutting.
-					var planes = new float4[solid.Sides.Count];
-					var planeSurfaces = new ChiselSurface[solid.Sides.Count];
-					// clip all the sides out of the brush.
+					bool enabled = true;
+					// compute all the sides of the brush that will be clipped.
 					for (int j = solid.Sides.Count; j-- > 0;)
 					{
-                        VmfSolidSide side = solid.Sides[j];
+						VmfSolidSide side = solid.Sides[j];
 
-                        // detect excluded polygons.
-                        //if (IsExcludedMaterial(side.Material))
-                        //    polygon.UserExcludeFromFinal = true;
-                        // detect collision-only brushes.
-                        //if (IsInvisibleMaterial(side.Material))
-                        //    pr.IsVisible = false;
+						// detect excluded polygons.
+						//if (IsExcludedMaterial(side.Material))
+						//polygon.UserExcludeFromFinal = true;
+						// detect collision-only brushes.
+						//if (IsInvisibleMaterial(side.Material))
+						//pr.IsVisible = false;
 
-                        // find the material in the unity project automatically.
-                        Material material;
+						Material material = null;
 
-                        // try finding the fully qualified texture name with '/' replaced by '.' so 'BRICK.BRICKWALL052D'.
-                        string materialName = side.Material.Replace("/", ".");
-                        if (materialName.Contains("."))
-                        {
-                            // try finding both 'BRICK.BRICKWALL052D' and 'BRICKWALL052D'.
-                            string tiny = materialName.Substring(materialName.LastIndexOf('.') + 1);
-                            material = materialSearcher.FindMaterial(new string[] { materialName, tiny });
-                            if (material == null && materialSearcherWarnings.Add(materialName))
-                                Debug.Log("Chisel: Tried to find material '" + materialName + "' and also as '" + tiny + "' but it couldn't be found in the project.");
-                        }
-                        else
-                        {
-                            // only try finding 'BRICKWALL052D'.
-                            material = materialSearcher.FindMaterial(new string[] { materialName });
-                            if (material == null && materialSearcherWarnings.Add(materialName))
-                                Debug.Log("Chisel: Tried to find material '" + materialName + "' but it couldn't be found in the project.");
-                        }
-
-                        // fallback to default material.
-                        if (material == null)
-                        {
-                            material = ChiselDefaultMaterials.DefaultFloorMaterial;
-                        }
-
-						// create chisel surface for the clip.
-						ChiselSurface surface = ChiselSurface.Create(material);
-
+						if (IsSkyboxMaterial(side.Material))
+						{
+							material = RenderSettings.skybox;
+						} else
 						// detect collision-only polygons.
 						if (IsInvisibleMaterial(side.Material))
 						{
 							material = ChiselDefaultMaterials.CollisionOnlyMaterial;
 							//surface.DestinationFlags &= ~SurfaceDestinationFlags.RenderReceiveCastShadows;
-                        }
-                        // detect excluded polygons.
-                        if (IsExcludedMaterial(side.Material))
+						} else
+						// detect excluded polygons.
+						if (IsExcludedMaterial(side.Material))
 						{
 							material = ChiselDefaultMaterials.ShadowOnlyMaterial;
 							//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
-                            //surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
-                        }
+							//surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
+						} else
+						{
+							// find the material in the unity project automatically.
+							material = gameResources.ImportVMT(side.Material);
+						}
+
+						// fallback to default material.
+						if (material == null)
+						{
+							//if (!side.Material.StartsWith("TOOLS"))
+								Debug.LogWarning($"Could not find the Material {side.Material}");
+							material = ChiselDefaultMaterials.DefaultFloorMaterial;
+						}
+
+						// create chisel surface for the clip.
+						ChiselSurface surface = ChiselSurface.Create(material);
 
 						// calculate the clipping planes.
 						Plane clip = VmfPointsToUnityPlane(side.Plane);
-                        /*
+						/*
 						var normal = clip.normal;
 						clip.distance += (normal.x * center.x) +
 										 (normal.y * center.y) +
 										 (normal.z * center.z);
-                        */
+						*/
 						planes[j] = new float4(clip.normal, clip.distance);
+
+						// check whether this surface is a displacement.
+						if (side.Displacement != null)
+						{
+							//surface.DestinationFlags = SurfaceDestinationFlags.None;
+
+							// keep track of the surface used to cut the mesh.
+							DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface, descriptionIndex = j });
+							enabled = false;
+
+							//surface = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
+						}
 						planeSurfaces[j] = surface;
 					}
 
+
+					// build a very large cube brush.
 					ChiselBrushComponent go = ChiselComponentFactory.Create<ChiselBrushComponent>($"Solid {solid.Id}", model);
+					// TODO: should output all sides that are not displaced, but visible
+					if (!enabled) go.enabled = false;
 					go.surfaceArray = new ChiselSurfaceArray();
 					go.surfaceArray.EnsureSize(planes.Length);
 
 					// cut all the clipping planes out of the brush in one go.
 					BrushMesh brushMesh;
 					BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceArray, out brushMesh);
-                    go.definition.BrushOutline = brushMesh;
+					if (brushMesh.polygons == null ||
+						brushMesh.polygons.Length == 0)
+						continue;
+					go.definition.BrushOutline = brushMesh;
 					var surfaceDefinitions = go.surfaceArray;
+					for (int j = 0; j < brushMesh.polygons.Length; j++)
+					{
+						surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
+				}
+
+				int mainTex = Shader.PropertyToID("_MainTex");
+					for (int j = solid.Sides.Count; j-- > 0;)
+					{
+						VmfSolidSide side = solid.Sides[j];
+						var surface = planeSurfaces[j];
+						var material = surface.RenderMaterial;
+
+						// calculate the texture coordinates.
+						int w = 256;
+						int h = 256;
+						if (material != null &&
+							material.HasProperty(mainTex) &&
+							material.mainTexture != null)
+						{
+							w = material.mainTexture.width;
+							h = material.mainTexture.height;
+						}
+
+						var clip = new Plane(planes[j].xyz, planes[j].w);
+						CalculateTextureCoordinates(go, unfixedOrigin, surface, clip, w, h, side.UAxis, side.VAxis);
+					}
+
+					// build displacements.
+					foreach (DisplacementSide displacement in DisplacementSurfaces)
+					{
+						// find the brush mesh polygon:
+						for (int polyidx = 0; polyidx < brushMesh.polygons.Length; polyidx++)
+						{
+							if (brushMesh.polygons[polyidx].descriptionIndex != displacement.descriptionIndex)
+								continue;
+
+							// find the polygon plane.
+							Plane plane = new(brushMesh.planes[polyidx].xyz, brushMesh.planes[polyidx].w);
+
+							// find all vertices that belong to this polygon:
+							List<Vector3> vertices = new();
+							{
+								var polygon = brushMesh.polygons[polyidx];
+								var firstEdge = polygon.firstEdge;
+								var edgeCount = polygon.edgeCount;
+								var lastEdge = firstEdge + edgeCount;
+								for (int e = firstEdge; e < lastEdge; e++)
+								{
+									vertices.Add(brushMesh.vertices[brushMesh.halfEdges[e].vertexIndex]);
+								}
+							}
+
+							// build displacement:
+							BuildDisplacementSurface(go, displacement.side, displacement.surface, vertices, plane);
+							surfaceDefinitions.surfaces[displacement.descriptionIndex] = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
+
+							break;
+						}
+					}
 
 					for (int j = 0; j < brushMesh.polygons.Length; j++)
 					{
 						surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
+					}
+
+					// finalize the brush by snapping planes and centering the pivot point.
+					go.transform.position += brushMesh.CenterAndSnapPlanes(ref surfaceDefinitions);
+                foreach (Transform child in go.transform)
+                    child.position -= go.transform.position;
+
+				}
+				catch(Exception ex)
+				{
+					Debug.Log("brush failed");
+					Debug.LogException(ex);
+				}
+			}
+
+            // iterate through all entities.
+            for (int e = 0; e < world.Entities.Count; e++)
+            {
+#if UNITY_EDITOR
+                UnityEditor.EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map (2/3)", "Converting Hammer Entities To Chisel Brushes (" + (e + 1) + " / " + world.Entities.Count + ")...", e / (float)world.Entities.Count);
+#endif
+				try
+				{ 
+					VmfEntity entity = world.Entities[e];
+
+					// skip entities that chisel can't handle.
+					switch (entity.ClassName)
+					{
+						case "func_areaportal":
+						case "func_areaportalwindow":
+						case "func_capturezone":
+						case "func_changeclass":
+						case "func_combine_ball_spawner":
+						case "func_dustcloud":
+						case "func_dustmotes":
+						case "func_nobuild":
+						case "func_nogrenades":
+						case "func_occluder":
+						case "func_precipitation":
+						case "func_proprespawnzone":
+						case "func_regenerate":
+						case "func_respawnroom":
+						case "func_smokevolume":
+						case "func_viscluster":
+							continue;
+					}
+
+					// iterate through all entity solids.
+					for (int i = 0; i < entity.Solids.Count; i++)
+					{
+						VmfSolid solid = entity.Solids[i];
+
+						// don't add triggers to the scene.
+						if (solid.Sides.Count > 0 && IsSpecialMaterial(solid.Sides[0].Material))
+							continue;
+
+						// HACK: Fix me in the future!
+						// HACK: Chisel doesn't support collision brushes yet- skip them completely!
+						if (solid.Sides.Count > 0 && IsInvisibleMaterial(solid.Sides[0].Material))
+							continue;
+						// HACK: Fix me in the future!
+
+						var center = Vector3.zero;
+						for (int j = 0; j < solid.Sides.Count; j++)
+						{
+							center.x += solid.Sides[j].Plane.P1.X;
+							center.y += solid.Sides[j].Plane.P1.Y;
+							center.z += solid.Sides[j].Plane.P1.Z;
+
+							center.x += solid.Sides[j].Plane.P2.X;
+							center.y += solid.Sides[j].Plane.P2.Y;
+							center.z += solid.Sides[j].Plane.P2.Z;
+
+							center.x += solid.Sides[j].Plane.P3.X;
+							center.y += solid.Sides[j].Plane.P3.Y;
+							center.z += solid.Sides[j].Plane.P3.Z;
+						}
+						center /= (float)(solid.Sides.Count * 3);
+
+						var unfixedOrigin = center;
+						center = Swizzle(center) * SourceEngineUnits.VmfInvMeters;
+
+						// prepare for uv calculations of clip planes after cutting.
+						var planes = new float4[solid.Sides.Count];
+						var planeSurfaces = new ChiselSurface[solid.Sides.Count];
+						// clip all the sides out of the brush.
+						for (int j = solid.Sides.Count; j-- > 0;)
+						{
+							VmfSolidSide side = solid.Sides[j];
+
+							// detect excluded polygons.
+							//if (IsExcludedMaterial(side.Material))
+							//    polygon.UserExcludeFromFinal = true;
+							// detect collision-only brushes.
+							//if (IsInvisibleMaterial(side.Material))
+							//    pr.IsVisible = false;
+
+							Material material = null;
+
+							if (IsSkyboxMaterial(side.Material))
+							{
+								material = RenderSettings.skybox;
+							} else
+							// detect collision-only polygons.
+							if (IsInvisibleMaterial(side.Material))
+							{
+								material = ChiselDefaultMaterials.CollisionOnlyMaterial;
+								//surface.DestinationFlags &= ~SurfaceDestinationFlags.RenderReceiveCastShadows;
+							} else
+							// detect excluded polygons.
+							if (IsExcludedMaterial(side.Material))
+							{
+								material = ChiselDefaultMaterials.ShadowOnlyMaterial;
+								//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
+								//surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
+							} else
+							{ 
+								// find the material in the unity project automatically.
+								material = gameResources.ImportVMT(side.Material);
+							}
+							
+							// fallback to default material.
+							if (material == null)
+							{
+								//if (!side.Material.StartsWith("TOOLS"))
+									Debug.LogWarning($"Could not find the Material {side.Material}");
+								material = ChiselDefaultMaterials.DefaultFloorMaterial;
+							}
+
+							// create chisel surface for the clip.
+							ChiselSurface surface = ChiselSurface.Create(material);
+
+							// calculate the clipping planes.
+							Plane clip = VmfPointsToUnityPlane(side.Plane);
+							/*
+							var normal = clip.normal;
+							clip.distance += (normal.x * center.x) +
+											 (normal.y * center.y) +
+											 (normal.z * center.z);
+							*/
+							planes[j] = new float4(clip.normal, clip.distance);
+							planeSurfaces[j] = surface;
+						}
+
+						ChiselBrushComponent go = ChiselComponentFactory.Create<ChiselBrushComponent>($"Solid {solid.Id}", model);
+						go.surfaceArray = new ChiselSurfaceArray();
+						go.surfaceArray.EnsureSize(planes.Length);
+
+						// cut all the clipping planes out of the brush in one go.
+						BrushMesh brushMesh;
+						BrushMeshFactory.CreateFromPlanes(planes, new Bounds(Vector3.zero, new Vector3(8192, 8192, 8192)), ref go.surfaceArray, out brushMesh);
+						go.definition.BrushOutline = brushMesh;
+						var surfaceDefinitions = go.surfaceArray;
+
+						for (int j = 0; j < brushMesh.polygons.Length; j++)
+						{
+							surfaceDefinitions.surfaces[j] = planeSurfaces[brushMesh.polygons[j].descriptionIndex];
 					}
 
 					int mainTex = Shader.PropertyToID("_MainTex");
@@ -535,12 +527,17 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
                     // detail brushes that do not affect the CSG world.
                     //if (entity.ClassName == "func_detail")
-                    //pr.IsNoCSG = true;
-                    // collision only brushes.
-					//if (entity.ClassName == "func_vehicleclip")
-					//pr.IsVisible = false;
+						//pr.IsNoCSG = true;
+						// collision only brushes.
+						//if (entity.ClassName == "func_vehicleclip")
+						//pr.IsVisible = false;
+					}
 				}
-            }
+				catch (Exception ex)
+				{
+					Debug.LogException(ex);
+				}
+			}
         }
 
         private static void CalculateTextureCoordinates(ChiselBrushComponent pr, Vector3 unfixedOrigin, ChiselSurface surface, Plane clip, int textureWidth, int textureHeight, VmfAxis UAxis, VmfAxis VAxis)
@@ -569,8 +566,8 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 			uVector /= UAxis.Scale;
 			vVector /= VAxis.Scale;
 
-			uVector /= inchesInMeters;
-			vVector /= inchesInMeters;
+			uVector /= SourceEngineUnits.VmfInvMeters;
+			vVector /= SourceEngineUnits.VmfInvMeters;
 			var umatrix = new double4(uVector, uoffset) * uscale;
 			var vmatrix = new double4(vVector, voffset) * vscale;
 		
@@ -584,14 +581,14 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 			surface.surfaceDetails.UV0 = uvMatrix;
 		}
 
-        /// <summary>
-        /// Determines whether the specified name is an excluded material.
-        /// </summary>
-        /// <param name="name">The name of the material.</param>
-        /// <returns><c>true</c> if the specified name is an excluded material; otherwise, <c>false</c>.</returns>
-        private static bool IsExcludedMaterial(string name)
+		/// <summary>
+		/// Determines whether the specified name is an excluded material.
+		/// </summary>
+		/// <param name="name">The name of the material.</param>
+		/// <returns><c>true</c> if the specified name is an excluded material; otherwise, <c>false</c>.</returns>
+		public static bool IsExcludedMaterial(string name)
         {
-            switch (name)
+            switch (name.ToUpperInvariant().Replace('\\', '/'))
             {
                 case "TOOLS/TOOLSNODRAW":
                     return true;
@@ -604,29 +601,46 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// </summary>
         /// <param name="name">The name of the material.</param>
         /// <returns><c>true</c> if the specified name is an invisible material; otherwise, <c>false</c>.</returns>
-        private static bool IsInvisibleMaterial(string name)
+        public static bool IsInvisibleMaterial(string name)
         {
-            switch (name)
+            switch (name.ToUpperInvariant().Replace('\\', '/'))
             {
                 case "TOOLS/TOOLSCLIP":
                 case "TOOLS/TOOLSNPCCLIP":
                 case "TOOLS/TOOLSPLAYERCLIP":
                 case "TOOLS/TOOLSGRENDADECLIP":
                 case "TOOLS/TOOLSSTAIRS":
-                    return true;
+				case "TOOLS/TOOLS_XOGVOLUME":
+					return true;
             }
             return false;
-        }
+		}
 
-        /// <summary>
-        /// Determines whether the specified name is a special material, these brush will not be
-        /// imported into Chisel.
-        /// </summary>
-        /// <param name="name">The name of the material.</param>
-        /// <returns><c>true</c> if the specified name is a special material; otherwise, <c>false</c>.</returns>
-        private static bool IsSpecialMaterial(string name)
+		/// <summary>
+		/// Determines whether the specified name is a skybox material, these brushes will use the environment skybox.
+		/// </summary>
+		/// <param name="name">The name of the material.</param>
+		/// <returns><c>true</c> if the specified name is a special material; otherwise, <c>false</c>.</returns>
+		private static bool IsSkyboxMaterial(string name)
+		{
+			switch (name.ToUpperInvariant().Replace('\\', '/'))
+			{
+				case "TOOLS/TOOLSSKYBOX":
+				case "TOOLS/TOOLS2DSKYBOX":
+					return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Determines whether the specified name is a special material, these brush will not be
+		/// imported into Chisel.
+		/// </summary>
+		/// <param name="name">The name of the material.</param>
+		/// <returns><c>true</c> if the specified name is a special material; otherwise, <c>false</c>.</returns>
+		private static bool IsSpecialMaterial(string name)
         {
-            switch (name)
+            switch (name.ToUpperInvariant().Replace('\\', '/'))
             {
                 case "TOOLS/TOOLSTRIGGER":
                 case "TOOLS/TOOLSBLOCK_LOS":
@@ -649,7 +663,8 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 case "TOOLS/TOOLS2DSKYBOX":
                 case "TOOLS/TOOLSSKYFOG":
                 case "TOOLS/TOOLSFOGVOLUME":
-                    return true;
+				case "TOOLS/TOOLS_XOGVOLUME":
+					return true;
             }
             return false;
         }
@@ -674,7 +689,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 			var uvmatrix = surface.surfaceDetails.UV0.ToMatrix4x4();
 			uvmatrix *= localToPlaneSpace;
 
-            var vmfStartPosition = Swizzle(side.Displacement.StartPosition) * inchesInMeters;
+            var vmfStartPosition = Swizzle(side.Displacement.StartPosition) * SourceEngineUnits.VmfInvMeters;
 
 			int[] vertex_winding_indices = new int[4];
 			vertex_winding_indices[0] = 0;
@@ -730,7 +745,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 					var normal = Swizzle(normals[z]);
 					var offset = Swizzle(offsets[z]);
 					var distance = distances[z];
-					meshVertices[v] = vertex + ((result + (normal * distance)) * inchesInMeters) + (offset * inchesInMeters);
+					meshVertices[v] = vertex + ((result + (normal * distance)) * SourceEngineUnits.VmfInvMeters) + (offset * SourceEngineUnits.VmfInvMeters);
 					meshUVs[v] = uvmatrix.MultiplyPoint(vertex);
 				}
 			}

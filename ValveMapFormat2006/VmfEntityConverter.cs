@@ -24,6 +24,8 @@
 
 using UnityEngine;
 using System.Collections.Generic;
+using Chisel.Import.Source.VPKTools;
+using System;
 
 #if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
 using AeternumGames.Chisel.Decals;
@@ -43,7 +45,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         /// </summary>
         /// <param name="parent">The parent to attach entities to.</param>
         /// <param name="world">The world to be imported.</param>
-        public static void Import(Transform parent, VmfWorld world)
+        public static void Import(GameResources gameResources, Transform parent, VmfWorld world)
         {
 #if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
             // create a material searcher to associate materials automatically.
@@ -66,7 +68,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     {
                         // create a new light object:
                         GameObject go = new GameObject("Light");
-                        go.transform.parent = GetLightingGroupOrCreate(parent);
+                        go.SetActive(false);
+
+						go.transform.parent = GetLightingGroupOrCreate(parent);
 
                         // set the object position:
                         if (TryGetEntityOrigin(entity, out Vector3 origin))
@@ -79,15 +83,60 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         light.lightmapBakeType = LightmapBakeType.Baked;
 #endif
                         light.range = 25.0f;
-                        
-                        // set the light color:
-                        if (entity.TryGetProperty("_light", out VmfVector4 color))
-                        {
-                            light.intensity = color.W * lightBrightnessScalar;
-                            light.color = new Color(color.X / 255.0f, color.Y / 255.0f, color.Z / 255.0f);
-                        }
+						light.shadows = LightShadows.Soft;
 
-                        break;
+                        // set the light color:
+                        VmfVector4 color;
+                        if (entity.TryGetProperty("_light", out color))
+						{
+							color.X = (float)Math.Pow(color.X / 255.0, 2.2);
+							color.Y = (float)Math.Pow(color.Y / 255.0, 2.2);
+							color.Z = (float)Math.Pow(color.Z / 255.0, 2.2);
+
+							color.W /= 255.0f;
+                            color.X *= color.W;
+							color.Y *= color.W;
+							color.Z *= color.W;
+						} else
+						    color = new VmfVector4(1, 1, 1, 1);
+
+						var intensity = 1.0f;
+						float maxRange = Math.Max(Math.Max(color.X, color.Y), color.Z);
+						if (maxRange > 1.0)
+						{
+							color.X /= maxRange;
+							color.Y /= maxRange;
+							color.Z /= maxRange;
+							intensity = (float)maxRange;
+						}
+						light.color = new Color(color.X, color.Y, color.Z);
+
+						intensity = Math.Min(8, (float)(Math.Pow(intensity, 1.0 / 2.2)));
+						light.intensity = intensity;
+
+
+						if (!entity.TryGetProperty("angles", out VmfVector3 angles))
+						{
+							angles = new(0, 0, 0);
+							if (entity.TryGetProperty("angle", out float angle))
+							{
+								if (angle >= 0) angles.Y = angle;
+								else if ((int)angle == -1) angles.X = -90;
+								else angles.X = 90;
+							}
+							if (entity.TryGetProperty("pitch", out float pitch))
+							{
+								angles.X = pitch;
+							}
+						}
+						if (!entity.TryGetProperty("origin", out VmfVector3 position))
+                            position = new(0, 0, 0);
+
+						// set the object position & rotation:
+						SourceEngineUnits.SetUnityTransformWithValveCoordinates(light.transform, angles.ToVector3(), position.ToVector3(), SourceEntity.Light);
+
+						go.SetActive(true);
+						break;
                     }
 
                     // https://developer.valvesoftware.com/wiki/Light_spot
@@ -96,15 +145,9 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                     {
                         // create a new light object:
                         GameObject go = new GameObject("Spot Light");
-                        go.transform.parent = GetLightingGroupOrCreate(parent);
+						go.SetActive(false);
 
-                        // set the object position:
-                        if (TryGetEntityOrigin(entity, out Vector3 origin))
-                            go.transform.position = origin;
-
-                        // set the object rotation:
-                        if (TryGetEntityRotation(entity, out Quaternion rotation))
-                            go.transform.rotation = rotation;
+						go.transform.parent = GetLightingGroupOrCreate(parent);
 
                         // add a light component:
                         Light light = go.AddComponent<Light>();
@@ -113,13 +156,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         light.lightmapBakeType = LightmapBakeType.Mixed;
 #endif
                         light.range = 10.0f;
-
-                        // set the light color:
-                        if (entity.TryGetProperty("_light", out VmfVector4 color))
-                        {
-                            light.intensity = color.W * lightBrightnessScalar;
-                            light.color = new Color(color.X / 255.0f, color.Y / 255.0f, color.Z / 255.0f);
-                        }
+						light.shadows = LightShadows.Soft;
 
                         // approximate the light cookie cone shape and the spot angle.
                         if (entity.TryGetProperty("_inner_cone", out int inner_cone) && entity.TryGetProperty("_cone", out int cone))
@@ -149,8 +186,84 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                             light.spotAngle = lightCone;
                         }
 
-                        break;
-                    }
+                        // set the light color:
+                        VmfVector4 color;
+                        if (entity.TryGetProperty("_light", out color))
+						{
+							color.X = (float)Math.Pow(color.X / 255.0, 2.2);
+							color.Y = (float)Math.Pow(color.Y / 255.0, 2.2);
+							color.Z = (float)Math.Pow(color.Z / 255.0, 2.2);
+
+							color.W /= 255.0f;
+                            color.X *= color.W;
+							color.Y *= color.W;
+							color.Z *= color.W;
+						} else
+						    color = new VmfVector4(1, 1, 1, 1);
+
+						var intensity = 1.0f;
+						float maxRange = Math.Max(Math.Max(color.X, color.Y), color.Z);
+						if (maxRange > 1.0)
+						{
+							color.X /= maxRange;
+							color.Y /= maxRange;
+							color.Z /= maxRange;
+							intensity = (float)maxRange;
+						}
+						light.color = new Color(color.X, color.Y, color.Z);
+
+						intensity = Math.Min(8, (float)(Math.Pow(intensity, 1.0 / 2.2)));
+						light.intensity = intensity;
+
+                        if (!entity.TryGetProperty("angles", out VmfVector3 angles))
+							angles = new(0, 0, 0);
+
+						if (!entity.TryGetProperty("origin", out VmfVector3 position))
+                            position = new(0, 0, 0);
+
+						// set the object position & rotation:
+						SourceEngineUnits.SetUnityTransformWithValveCoordinates(light.transform, angles.ToVector3(), position.ToVector3(), SourceEntity.Light);
+						go.SetActive(true);
+						break;
+					}
+
+					default:
+					{
+                        if (entity.ClassName != "env_sprite" &&
+							entity.TryGetProperty("model", out string model))
+                        {
+                            var prefab = gameResources.ImportModel(model);
+                            if (prefab == null)
+                            {
+                                Debug.LogError($"Can't find model {model}");
+                                break;
+                            }
+
+                            var go = UnityEditor.PrefabUtility.InstantiatePrefab(prefab) as GameObject;
+                            if (!go)
+                                break;
+
+                            go.transform.parent = GetPropsGroupOrCreate(parent);
+
+                            if (entity.TryGetProperty("disableshadows", out float disableshadows) && disableshadows > 0)
+                            {
+                                foreach (var mesh in go.GetComponentsInChildren<MeshRenderer>())
+                                {
+                                    mesh.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                                    mesh.receiveShadows = false;
+                                }
+                            }
+
+                            if (!entity.TryGetProperty("angles", out VmfVector3 angles))
+                                angles = new(0, 0, 0);
+
+                            if (!entity.TryGetProperty("origin", out VmfVector3 position))
+                                position = new(0, 0, 0);
+
+                            SourceEngineUnits.SetUnityTransformWithValveCoordinates(go.transform, angles.ToVector3(), position.ToVector3(), SourceEntity.Model);
+                        }
+						break;
+					}
 
 #if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
                     case "infodecal":
@@ -214,7 +327,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                         break;
                     }
 #endif
-                }
+				}
             }
         }
 
@@ -233,7 +346,24 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 return lighting;
             }
             return lighting;
-        }
+		}
+
+		/// <summary>
+		/// Gets the lighting group transform or creates it.
+		/// </summary>
+		/// <param name="parent">The parent to create the lighting group under.</param>
+		/// <returns>The transform of the lighting group</returns>
+		private static Transform GetPropsGroupOrCreate(Transform parent)
+		{
+			Transform lighting = parent.Find("Props");
+			if (lighting == null)
+			{
+				lighting = new GameObject("Props").transform;
+				lighting.transform.parent = parent;
+				return lighting;
+			}
+			return lighting;
+		}
 
 #if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
         /// <summary>
@@ -253,12 +383,12 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
             return lighting;
         }
 #endif
-        private static bool TryGetEntityOrigin(VmfEntity entity, out Vector3 result)
+		private static bool TryGetEntityOrigin(VmfEntity entity, out Vector3 result)
         {
             result = default;
             if (entity.TryGetProperty("origin", out VmfVector3 v))
             {
-                result = VmfWorldConverter.Swizzle(v) * VmfWorldConverter.inchesInMeters;
+                result = VmfWorldConverter.Swizzle(v) * SourceEngineUnits.VmfInvMeters;
                 return true;
             }
             return false;

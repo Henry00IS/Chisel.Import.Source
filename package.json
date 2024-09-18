@@ -19,6 +19,7 @@
   "dependencies": {
     "com.unity.mathematics": "1.1.0",
     "com.chisel.core": "0.1.0-preview",
-    "com.chisel.unity.components": "0.1.0-preview"
+    "com.chisel.unity.components": "0.1.0-preview",
+    "com.chisel.import.source.vpktools": "1.0.0-preview"
   }
 }
