@@ -1,4 +1,4 @@
-﻿///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // MIT License
 //
 // Copyright(c) 2018-2020 Henry de Jongh
@@ -22,7 +22,9 @@
 // SOFTWARE.
 ////////////////////// https://github.com/Henry00IS/ ////////////////// http://aeternumgames.com //
 
-﻿using System;
+using Chisel.Import.Source.VPKTools;
+
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -377,7 +379,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
                 return true;
             }
             // detect floating point value.
-            else if (rawvalue.Contains('.') && float.TryParse(rawvalue, out vf))
+            else if (rawvalue.Contains('.') && float.TryParse(rawvalue, NumberStyles.Float, CultureInfo.InvariantCulture, out vf))
             {
                 value = vf;
                 return true;

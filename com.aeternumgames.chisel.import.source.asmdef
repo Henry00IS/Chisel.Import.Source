@@ -4,7 +4,8 @@
     "references": [
         "com.chisel.core",
         "Unity.Mathematics",
-        "com.chisel.unity.components"
+        "com.chisel.unity.components",
+        "com.chisel.import.source.vpktools"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
