@@ -58,6 +58,15 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
         }
 
         /// <summary>
+        /// Converts this instance to a <see cref="UnityEngine.Vector3"/> without changing coordinate systems.
+        /// </summary>
+        /// <returns>A <see cref="UnityEngine.Vector3"/> with the same X, Y and Z values.</returns>
+        public UnityEngine.Vector3 ToVector3()
+        {
+            return new UnityEngine.Vector3(X, Y, Z);
+        }
+
+        /// <summary>
         /// Returns a <see cref="System.String"/> that represents this instance.
         /// </summary>
         /// <returns>A <see cref="System.String"/> that represents this instance.</returns>

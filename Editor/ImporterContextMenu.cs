@@ -83,7 +83,7 @@ namespace AeternumGames.Chisel.Import.Source.Editor
 
 					// create chisel model and import all of the brushes.
 					EditorUtility.DisplayProgressBar("Chisel: Importing Source Engine Map", "Preparing Material Searcher...", 0.0f);
-                    ValveMapFormat2006.VmfWorldConverter.Import(gameResources, ChiselModelManager.CreateNewModel(go.transform), map);
+                    ValveMapFormat2006.VmfWorldConverter.Import(gameResources, ChiselModelManager.Instance.CreateNewModel(go.transform), map);
 
 #if COM_AETERNUMGAMES_CHISEL_DECALS // optional decals package: https://github.com/Henry00IS/Chisel.Decals
                     // rebuild the world as we need the collision mesh for decals.
@@ -92,7 +92,7 @@ namespace AeternumGames.Chisel.Import.Source.Editor
                     ChiselNodeHierarchyManager.Rebuild();
 #endif
                     // begin converting hammer entities to unity objects.
-                    ValveMapFormat2006.VmfEntityConverter.Import(go.transform, map);
+                    ValveMapFormat2006.VmfEntityConverter.Import(gameResources, go.transform, map);
                 }
             }
             catch (Exception ex)

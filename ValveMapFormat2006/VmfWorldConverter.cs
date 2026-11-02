@@ -213,13 +213,13 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 						// detect collision-only polygons.
 						if (IsInvisibleMaterial(side.Material))
 						{
-							material = ChiselDefaultMaterials.CollisionOnlyMaterial;
+							material = ChiselProjectSettings.CollisionSurfacesMaterial;
 							//surface.DestinationFlags &= ~SurfaceDestinationFlags.RenderReceiveCastShadows;
 						} else
 						// detect excluded polygons.
 						if (IsExcludedMaterial(side.Material))
 						{
-							material = ChiselDefaultMaterials.ShadowOnlyMaterial;
+							material = ChiselProjectSettings.ShadowOnlySurfacesMaterial;
 							//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
 							//surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
 						} else
@@ -233,7 +233,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 						{
 							//if (!side.Material.StartsWith("TOOLS"))
 								Debug.LogWarning($"Could not find the Material {side.Material}");
-							material = ChiselDefaultMaterials.DefaultFloorMaterial;
+							material = ChiselProjectSettings.DefaultFloorMaterial;
 						}
 
 						// create chisel surface for the clip.
@@ -258,7 +258,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 							DisplacementSurfaces.Add(new DisplacementSide { side = side, surface = surface, descriptionIndex = j });
 							enabled = false;
 
-							//surface = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
+							//surface = ChiselSurface.Create(ChiselProjectSettings.ShadowOnlySurfacesMaterial);
 						}
 						planeSurfaces[j] = surface;
 					}
@@ -333,7 +333,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 
 							// build displacement:
 							BuildDisplacementSurface(go, displacement.side, displacement.surface, vertices, plane);
-							surfaceDefinitions.surfaces[displacement.descriptionIndex] = ChiselSurface.Create(ChiselDefaultMaterials.ShadowOnlyMaterial);
+							surfaceDefinitions.surfaces[displacement.descriptionIndex] = ChiselSurface.Create(ChiselProjectSettings.ShadowOnlySurfacesMaterial);
 
 							break;
 						}
@@ -448,13 +448,13 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 							// detect collision-only polygons.
 							if (IsInvisibleMaterial(side.Material))
 							{
-								material = ChiselDefaultMaterials.CollisionOnlyMaterial;
+								material = ChiselProjectSettings.CollisionSurfacesMaterial;
 								//surface.DestinationFlags &= ~SurfaceDestinationFlags.RenderReceiveCastShadows;
 							} else
 							// detect excluded polygons.
 							if (IsExcludedMaterial(side.Material))
 							{
-								material = ChiselDefaultMaterials.ShadowOnlyMaterial;
+								material = ChiselProjectSettings.ShadowOnlySurfacesMaterial;
 								//surface.DestinationFlags &= SurfaceDestinationFlags.CastShadows;
 								//surface.DestinationFlags |= SurfaceDestinationFlags.Collidable;
 							} else
@@ -468,7 +468,7 @@ namespace AeternumGames.Chisel.Import.Source.ValveMapFormat2006
 							{
 								//if (!side.Material.StartsWith("TOOLS"))
 									Debug.LogWarning($"Could not find the Material {side.Material}");
-								material = ChiselDefaultMaterials.DefaultFloorMaterial;
+								material = ChiselProjectSettings.DefaultFloorMaterial;
 							}
 
 							// create chisel surface for the clip.
